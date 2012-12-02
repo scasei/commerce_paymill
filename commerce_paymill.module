@@ -244,13 +244,8 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
 
   // Get current API key
   $api_key = commerce_paymill_get_key($payment_method['settings']);
-
-  // Instantiate services
-  $client_service = new Services_Paymill_Clients($api_key, COMMERCE_PAYMILL_SERVER);
-  $payment_service = new Services_Paymill_Payments($api_key, COMMERCE_PAYMILL_SERVER);
-  $preauthorization_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER);
-  $transaction_service = new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
   
+  // Get client ID  
   $client_id = commerce_paymill_get_client($order, $payment_method['settings']);
   if (!$client_id) return FALSE;
 
@@ -259,6 +254,7 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
     'token' => $pane_values['credit_card']['token'],
     'client' => $client_id,
   );
+  $payment_service = new Services_Paymill_Payments($api_key, COMMERCE_PAYMILL_SERVER);
   $payment = $payment_service->create($payment_params);
   if (isset($payment['error'])) {
 	drupal_set_message(check_plain($payment['error']), 'error');
@@ -273,10 +269,12 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
   );
   if ($payment_method['settings']['capture_mode'] == COMMERCE_PAYMILL_CAPTURE_MODE_PREAUTH)
   {
+    $preauthorization_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER);
     $transaction = $preauthorization_service->create($transaction_params);
   }
   else
   {
+    $transaction_service = new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
     $transaction_params['description'] = 'Order:' . $order->order_id;
     $transaction = $transaction_service->create($transaction_params);
   }
@@ -315,7 +313,7 @@ function commerce_paymill_get_client($order, $settings) {
 
   // Update current user with client ID.
   if ($user->uid > 0) {
-    $user->data['commerce_paymill_client_id'] = $client['data']['id'];
+    $user->data['commerce_paymill_client_id'] = $client['id'];
     $edit = array('data' => $user->data);
     user_save($user, $edit);
   }
