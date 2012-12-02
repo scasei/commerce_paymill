@@ -9,8 +9,6 @@ define('COMMERCE_PAYMILL_BRIDGE', 'https://bridge.paymill.com/');
 define('COMMERCE_PAYMILL_SERVER', 'https://api.paymill.de/v2/');
 define('COMMERCE_PAYMILL_MODE_TEST', 'test');
 define('COMMERCE_PAYMILL_MODE_LIVE', 'live');
-define('COMMERCE_PAYMILL_CAPTURE_MODE_FULL', 'full');
-define('COMMERCE_PAYMILL_CAPTURE_MODE_PREAUTH', 'preauth');
 
 /**
  * Implements hook_commerce_payment_method_info().
@@ -43,7 +41,7 @@ function commerce_paymill_settings_form($settings = NULL) {
       'public_key' => '',
     ),
     'mode' => COMMERCE_PAYMILL_MODE_TEST,
-    'capture_mode' => COMMERCE_PAYMILL_CAPTURE_MODE_FULL,
+    'capture_mode' => COMMERCE_CREDIT_AUTH_CAPTURE,
   );
 
   $form[COMMERCE_PAYMILL_MODE_TEST] = array(
@@ -102,8 +100,8 @@ function commerce_paymill_settings_form($settings = NULL) {
     '#type' => 'radios',
     '#title' => t('Capture mode'),
     '#options' => array(
-      COMMERCE_PAYMILL_CAPTURE_MODE_FULL => t('Capture'),
-      COMMERCE_PAYMILL_CAPTURE_MODE_PREAUTH => t('Pre-authorize only'),
+      COMMERCE_CREDIT_AUTH_CAPTURE => t('Capture'),
+      COMMERCE_CREDIT_AUTH_ONLY => t('Pre-authorize only'),
     ),
     '#default_value' => $settings['capture_mode'],
   );
@@ -138,6 +136,61 @@ function commerce_paymill_menu() {
   );
 
   return $items;
+}
+
+/**
+ * Allow users to capture authorized amounts.
+ */
+function commerce_paymill_capture_form($form, &$form_state, $order, $transaction) {
+  $form_state['order'] = $order;
+  $form_state['transaction'] = $transaction;
+
+  // Load and store the payment method instance for this transaction.
+  $payment_method = commerce_payment_method_instance_load($transaction->instance_id);
+  $form_state['payment_method'] = $payment_method;
+
+  $balance = commerce_payment_order_balance($order);
+
+  if ($balance['amount'] > 0 && $balance['amount'] < $transaction->amount) {
+    $default_amount = $balance['amount'];
+  }
+  else {
+    $default_amount = $transaction->amount;
+  }
+
+  // Convert the price amount to a user friendly decimal value.
+  $default_amount = commerce_currency_amount_to_decimal($default_amount, $transaction->currency_code);
+
+  $description = implode('<br />', array(
+    t('Authorization: @amount', array('@amount' => commerce_currency_format($transaction->amount, $transaction->currency_code))),
+    t('Order balance: @balance', array('@balance' => commerce_currency_format($balance['amount'], $balance['currency_code']))),
+  ));
+
+  $form['amount'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Capture amount'),
+    '#description' => $description,
+    '#default_value' => $default_amount,
+    '#field_suffix' => check_plain($transaction->currency_code),
+    '#size' => 16,
+  );
+
+  $form = confirm_form($form,
+    t('What amount do you want to capture?'),
+    'admin/commerce/orders/' . $order->order_id . '/payment',
+    '',
+    t('Capture'),
+    t('Cancel'),
+    'confirm'
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler: process a transaction for the authorized amount.
+ */
+function commerce_paymill_capture_form_submit($form, &$form_state) {
 }
 
 /**
@@ -280,7 +333,7 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
     'currency' => $commerce_order_total[0]['currency_code'],
     'payment' => $payment['id'],
   );
-  if ($payment_method['settings']['capture_mode'] == COMMERCE_PAYMILL_CAPTURE_MODE_PREAUTH)
+  if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY)
   {
     $preauthorization_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER);
     $transaction = $preauthorization_service->create($transaction_params);
