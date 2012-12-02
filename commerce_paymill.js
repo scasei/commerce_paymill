@@ -12,7 +12,7 @@
     }
   };
 
-  function paymillSubmit() {
+  function paymillSubmit(event) {
     var selected = $('input[name="commerce_payment[payment_method]"]:checked').val();
     if (selected != 'commerce_paymill|commerce_payment_commerce_paymill') return;
     event.preventDefault();
