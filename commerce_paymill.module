@@ -17,9 +17,11 @@ function commerce_paymill_commerce_payment_method_info() {
   $payment_methods = array();
 
   $payment_methods['commerce_paymill'] = array(
-    'title' => t('Credit/debit card (via Paymill)'),
+    'base' => 'commerce_paymill',
+    'title' => t('Paymill'),
+    'display_title' => t('Credit card'),
     'description' => t('Provides credit card payment during checkout via Paymill.'),
-    'active' => TRUE,
+    'terminal' => FALSE,
   );
 
   return $payment_methods;
@@ -122,7 +124,7 @@ function commerce_paymill_menu() {
     'page callback' => 'commerce_paymill_configure',
     'access arguments' => array('administer payment methods'),
     'type' => MENU_CALLBACK,
-	'file' => 'commerce_paymill.admin.inc',
+    'file' => 'commerce_paymill.admin.inc',
   );
 
   // Add a menu item for capturing authorizations.
@@ -134,7 +136,7 @@ function commerce_paymill_menu() {
     'type' => MENU_DEFAULT_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
     'weight' => 2,
-	'file' => 'commerce_paymill.admin.inc',
+    'file' => 'commerce_paymill.admin.inc',
   );
 
   return $items;
@@ -227,7 +229,7 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
   $payment_service = new Services_Paymill_Payments($api_key, COMMERCE_PAYMILL_SERVER);
   $payment = $payment_service->create($payment_params);
   if (isset($payment['error'])) {
-	drupal_set_message(check_plain($payment['error']), 'error');
+    drupal_set_message(check_plain($payment['error']), 'error');
     return FALSE;
   }
 
@@ -263,7 +265,7 @@ function commerce_paymill_get_client($order, $settings) {
   if (isset($user->data)) {
     if (isset($user->data['commerce_paymill_client_id'])) {
       return $user->data['commerce_paymill_client_id'];
-	}
+    }
   }
 
   // Instantiate client service.
@@ -277,7 +279,7 @@ function commerce_paymill_get_client($order, $settings) {
   );  
   $client = $client_service->create($client_params);
   if (isset($client['error'])) {
-	drupal_set_message(check_plain($client['error']), 'error');
+    drupal_set_message(check_plain($client['error']), 'error');
     return FALSE;
   }
 
