@@ -36,7 +36,7 @@ function commerce_paymill_capture_form($form, &$form_state, $order, $transaction
   $form['amount'] = array(
     '#type' => 'textfield',
     '#title' => t('Capture amount'),
-    '#description' => $description,
+    '#description' => filter_xss($description),
     '#default_value' => $default_amount,
     '#field_suffix' => check_plain($transaction->currency_code),
     '#size' => 16,
