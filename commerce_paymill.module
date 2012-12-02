@@ -203,15 +203,16 @@ function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_p
 
   // Get order total for order.
   $commerce_order_total = field_get_items('commerce_order', $order, 'commerce_order_total');
+  $charge = $commerce_order_total[0];
 
   // Add hidden fields for amount/currency/Paymill token.
   $form['credit_card']['amount'] = array(
     '#type' => 'hidden',
-    '#value' => sprintf('%.2f', $commerce_order_total[0]['amount'] / 100),
+    '#value' => commerce_currency_amount_to_decimal($charge['amount'], $charge['currency_code']),
   );
   $form['credit_card']['currency'] = array(
     '#type' => 'hidden',
-    '#value' => $commerce_order_total[0]['currency_code'],
+    '#value' => $charge['currency_code'],
   );
   $form['credit_card']['token'] = array(
     '#type' => 'hidden',
