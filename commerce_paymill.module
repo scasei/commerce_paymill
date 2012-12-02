@@ -207,6 +207,13 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
     drupal_set_message(t('No Paymill token received. Your card has not been charged. Please enable JavaScript to complete your payment.'), 'error');
     return FALSE;
   }
+}
+
+/**
+ * Payment method callback: submit form submission.
+ */
+function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge) {
+  $order->data['commerce_paymill'] = $pane_values;
 
   // Include Paymill libraries.
   libraries_load('paymill');
@@ -242,20 +249,22 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
   if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY)
   {
     $preauthorization_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER);
-    $transaction = $preauthorization_service->create($transaction_params);
+    $response = $preauthorization_service->create($transaction_params);
   }
   else
   {
     $transaction_service = new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
     $transaction_params['description'] = 'Order:' . $order->order_id;
-    $transaction = $transaction_service->create($transaction_params);
+    $response = $transaction_service->create($transaction_params);
   }
 
-  // Need error checking for the transaction here!.
-  if (isset($transaction['error'])) {
-    drupal_set_message(check_plain($transaction['error']), 'error');
+  // Check for errors from the transaction
+  if (isset($response['error'])) {
+    drupal_set_message(check_plain($response['error']), 'error');
     return FALSE;
   }
+
+  commerce_paymill_transaction($payment_method, $order, $charge);
 }
 
 function commerce_paymill_get_client($order, $settings) {
@@ -300,15 +309,6 @@ function commerce_paymill_get_key($settings, $key = 'private') {
   $mode = $settings['mode'];
   $key = $settings[$mode][$key . '_key'];
   return $key;
-}
-
-/**
- * Payment method callback: submit form submission.
- */
-function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge) {
-  $order->data['commerce_paymill'] = $pane_values;
-
-  commerce_paymill_transaction($payment_method, $order, $charge);
 }
 
 /**
