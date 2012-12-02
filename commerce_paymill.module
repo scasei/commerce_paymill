@@ -267,6 +267,7 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
   // Set transaction status.
   if (isset($response['error'])) {
     $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
+	$transaction->message = check_plain($response['error']);
   }
   else {
     if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
@@ -275,6 +276,7 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
     else {
       $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
     }
+	$transaction->remote_id = $response['id'];
   }
 
   // Save transaction.
