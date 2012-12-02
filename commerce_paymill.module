@@ -246,13 +246,11 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
     'currency' => $commerce_order_total[0]['currency_code'],
     'payment' => $payment['id'],
   );
-  if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY)
-  {
+  if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
     $preauthorization_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER);
     $response = $preauthorization_service->create($transaction_params);
   }
-  else
-  {
+  else {
     $transaction_service = new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
     $transaction_params['description'] = 'Order:' . $order->order_id;
     $response = $transaction_service->create($transaction_params);
@@ -267,7 +265,7 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
   // Set transaction status.
   if (isset($response['error'])) {
     $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
-	$transaction->message = check_plain($response['error']);
+    $transaction->message = check_plain($response['error']);
   }
   else {
     if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
@@ -276,7 +274,7 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
     else {
       $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
     }
-	$transaction->remote_id = $response['id'];
+    $transaction->remote_id = $response['id'];
   }
 
   // Save transaction.
