@@ -100,8 +100,7 @@ function commerce_paymill_capture_form_submit($form, &$form_state) {
 function commerce_paymill_configure() {
   // Check Payment UI is enabled.
   if (!module_exists('commerce_payment_ui')) {
-    $message = t('The Payment UI module is disabled - please enable it before configuring Commerce Paymill');
-    drupal_set_message($message, 'warning');
+    drupal_set_message(t('The Payment UI module is disabled - please enable it before configuring Commerce Paymill'), 'warning');
     drupal_goto('admin/modules');
     return;
   }
@@ -109,8 +108,7 @@ function commerce_paymill_configure() {
   // Load default payment rule configuration.
   $rule = rules_config_load('commerce_payment_commerce_paymill');
   if (empty($rule)) {
-    $message = t('The default payment rule configuration cannot be found');
-    drupal_set_message($message, 'warning');
+    drupal_set_message(t('The default payment rule configuration cannot be found'), 'warning');
     drupal_goto('admin/commerce/config/payment-methods');
     return;
   }
@@ -118,8 +116,7 @@ function commerce_paymill_configure() {
   // Check first action for default payment rule configuration.
   $action = $rule->actions()->current();
   if (empty($action)) {
-    $message = t('No actions exist for the default payment rule configuration');
-    drupal_set_message($message, 'warning');
+    drupal_set_message(t('No actions exist for the default payment rule configuration'), 'warning');
     $goto = sprintf(
       'admin/commerce/config/payment-methods/manage/%d',
       $rule->id
