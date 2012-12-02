@@ -270,11 +270,12 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
   else {
     if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
       $transaction->status = COMMERCE_PAYMENT_STATUS_PENDING;
+      $transaction->remote_id = $response['preauthorization']['id'];
     }
     else {
       $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
+      $transaction->remote_id = $response['id'];
     }
-    $transaction->remote_id = $response['id'];
   }
 
   // Save transaction.
