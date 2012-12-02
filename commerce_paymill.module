@@ -257,14 +257,34 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
     $transaction_params['description'] = 'Order:' . $order->order_id;
     $response = $transaction_service->create($transaction_params);
   }
+  
+  // Create Commerce transaction.
+  $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
+  $transaction->instance_id = $payment_method['instance_id'];
+  $transaction->amount = $charge['amount'];
+  $transaction->currency_code = $charge['currency_code'];
+  
+  // Set transaction status.
+  if (isset($response['error'])) {
+    $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
+  }
+  else {
+    if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
+      $transaction->status = COMMERCE_PAYMENT_STATUS_PENDING;
+    }
+    else {
+      $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
+    }
+  }
 
-  // Check for errors from the transaction
+  // Save transaction.
+  commerce_payment_transaction_save($transaction);
+
+  // Check for errors from the response.
   if (isset($response['error'])) {
     drupal_set_message(check_plain($response['error']), 'error');
     return FALSE;
   }
-
-  commerce_paymill_transaction($payment_method, $order, $charge);
 }
 
 function commerce_paymill_get_client($order, $settings) {
@@ -309,30 +329,6 @@ function commerce_paymill_get_key($settings, $key = 'private') {
   $mode = $settings['mode'];
   $key = $settings[$mode][$key . '_key'];
   return $key;
-}
-
-/**
- * Creates a payment transaction for the specified charge amount.
- *
- * @param payment_method $payment_method
- *   The payment method instance object used to charge this payment.
- * @param order $order
- *   The order object the payment applies to.
- * @param charge $charge
- *   An array indicating the amount and currency code to charge.
- *
- * @return transaction
- *   A transaction representing the created payment
- */
-function commerce_paymill_transaction($payment_method, $order, $charge) {
-  $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
-  $transaction->instance_id = $payment_method['instance_id'];
-  $transaction->amount = $charge['amount'];
-  $transaction->currency_code = $charge['currency_code'];
-  $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
-
-  commerce_payment_transaction_save($transaction);
-  return $transaction;
 }
 
 /**
