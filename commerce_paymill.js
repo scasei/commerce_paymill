@@ -8,118 +8,67 @@
   Drupal.behaviors.commercePaymill = {
     attach: function(context, settings) {
       window.PAYMILL_PUBLIC_KEY = settings.commercePaymill.publicKey;
-      $('#edit-continue').bind('click', paymillSubmit);
+      if ($('input.paymill-token', context).size() > 0) {
+        var form = $('input.paymill-token', context).parents('form');
+        if (!$(form).hasClass('paymill-preprocessed')) {
+          $(form).addClass('paymill-preprocessed');
+          $(form).submit(function(event) {
+            // If as only one submit button.
+            if ($('input[type=submit], button[type=submit]').size() == 1) {
+              $('input[type=submit], button[type=submit]').click();
+            }
+            if (!$(form).hasClass('paymill-processed')) {
+              event.preventDefault();
+              return false;
+            }
+          });
+          $('input[type=submit]', form).click(function() {
+            if (!$(form).hasClass('paymill-processed')) {
+              paymillGetToken(form, this);
+            }
+          });
+        }
+      }
     }
   };
 
-  function paymillSubmit(event) {
-    var selected = $('input[name="commerce_payment[payment_method]"]:checked').val();
-    if (selected != 'commerce_paymill|commerce_payment_commerce_paymill') return;
-    event.preventDefault();
-    paymillGetToken();
-    return false;
-  }
-
-  function paymillGetToken() {
-    var cardHolderName = $('#payment-details input:eq(0)').val();
-    var cardNumber = $('#payment-details input:eq(1)').val();
-    var expMonth = $('#payment-details select:eq(0)').val();
-    var expYear = $('#payment-details select:eq(1)').val();
-    var securityCode = $('#payment-details input:eq(2)').val();
-    var orderAmount = $('input[name="commerce_payment[payment_details][credit_card][amount]"]').val();
-    var orderCurrency = $('input[name="commerce_payment[payment_details][credit_card][currency]"]').val();
+  function paymillGetToken(form, button) {
+    var cardHolderName = $('.paymill-owner', form).val();
+    var cardNumber = $('.paymill-number', form).val();
+    var expMonth = $('.paymill-exp-month', form).val();
+    var expYear = $('.paymill-exp-year', form).val();
+    var securityCode = $('.paymill-code', form).val();
+    var orderAmount = $('.paymill-amount', form).val();
+    var orderCurrency = $('.paymill-currency', form).val();
     paymill.config('3ds_cancel_label', Drupal.t('Cancel'));
     paymill.createToken({
-      number: cardNumber,
-      exp_month: expMonth,
-      exp_year: expYear,
-      cvc: securityCode,
-      cardholdername: cardHolderName,
-      amount: orderAmount,
-      currency: orderCurrency,
-    },
-    paymillResponseHandler);
-  }
+        number: cardNumber,
+        exp_month: expMonth,
+        exp_year: expYear,
+        cvc: securityCode,
+        cardholdername: cardHolderName,
+        amount: orderAmount,
+        currency: orderCurrency
+      },
+      function(error, result) {
+        if (error) {
+          $('.paymill-error', form).val(error.apierror);
+        }
+        else {
+          $('.paymill-error', form).val('');
+        }
+        if (result) {
+          $('.paymill-token', form).val(result.token);
+        }
+        else {
+          $('.paymill-token', form).val('');
+        }
+        $(form).removeClass('paymill-preprocessed');
+        $(form).addClass('paymill-processed');
+        $(button).click();
+      });
 
-  function paymillResponseHandler(error,result) {
-    if (error) {
-      if (error.apierror == '3ds_cancelled') {
-        return;
-      }
-      var errorText = paymillGetError(error.apierror);
-      formSetError(errorText);
-      $('.form-submit').removeAttr("disabled");
-      $('.checkout-processing').hide();
-    } else {
-      $('input[name="commerce_payment[payment_details][credit_card][token]"]').val(result.token);
-      $('#commerce-checkout-form-review').get(0).submit();
-    }
-  }
-  
-  function formSetError(errorText) {
-    if (! $('#edit-commerce-payment-error').length) {
-      $('#edit-commerce-payment > .fieldset-wrapper').prepend('<div id="edit-commerce-payment-error" class="messages error"></div><br />');
-    }
-    $('#edit-commerce-payment-error').html(errorText);
-  }
 
-  function paymillGetError(error) {
-    switch (error) {
-      case 'internal_server_error':
-        return Drupal.t('Communication with Paymill failed');
-        break;
-
-      case 'invalid_public_key':
-        return Drupal.t('Invalid public key');
-        break;
-
-      case 'unknown_error':
-        return Drupal.t('Unknown error');
-        break;
-
-      case '3ds_cancelled':
-        return Drupal.t('User cancelled 3D security password entry');
-        break;
-
-      case 'field_invalid_card_number':
-        return Drupal.t('Missing or invalid credit card number');
-        break;
-
-      case 'field_invalid_card_exp_year':
-        return Drupal.t('Missing or invalid expiry year');
-        break;
-
-      case 'field_invalid_card_exp_month':
-        return Drupal.t('Missing or invalid expiry month');
-        break;
-
-      case 'field_invalid_card_exp':
-        return Drupal.t('Card has expired');
-        break;
-
-      case 'field_invalid_card_cvc':
-        return Drupal.t('Missing or invalid checking number');
-        break;
-
-      case 'field_invalid_card_holder':
-        return Drupal.t('Missing or invalid cardholder name');
-        break;
-
-      case 'field_invalid_account_number':
-        return Drupal.t('Missing or invalid bank account number');
-        break;
-
-      case 'field_invalid_account_holder':
-        return Drupal.t('Missing or invalid bank account holder');
-        break;
-
-      case 'field_invalid_bank_code':
-        return Drupal.t('Missing or invalid zip code');
-        break;
-
-      default:
-        return Drupal.checkPlain(error.replace('_', ' '));
-    }
   }
 
 })(jQuery);
