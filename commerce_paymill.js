@@ -34,8 +34,8 @@
       exp_month: expMonth,
       exp_year: expYear,
       cvc: securityCode,
-      cardholdername: cardHolderName,
-      amount: orderAmount,
+      cardholder: cardHolderName,
+      amount_int: orderAmount,
       currency: orderCurrency,
     },
     paymillResponseHandler);
@@ -55,7 +55,7 @@
       $('#commerce-checkout-form-review').get(0).submit();
     }
   }
-  
+
   function formSetError(errorText) {
     if (! $('#edit-commerce-payment-error').length) {
       $('#edit-commerce-payment > .fieldset-wrapper').prepend('<div id="edit-commerce-payment-error" class="messages error"></div><br />');
@@ -115,6 +115,14 @@
 
       case 'field_invalid_bank_code':
         return Drupal.t('Missing or invalid zip code');
+        break;
+
+      case 'field_invalid_amount_int':
+        return Drupal.t('Missing or invalid amount');
+        break;
+
+      case 'field_invalid_currency':
+        return Drupal.t('Missing or invalid currency code');
         break;
 
       default:
