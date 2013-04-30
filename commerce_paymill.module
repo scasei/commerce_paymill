@@ -193,7 +193,7 @@ function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_p
   // Load Paymill bridge.
   $key = commerce_paymill_get_key($payment_method['settings'], 'public');
   $settings = array('publicKey' => $key);
-  $form['credit_card']['#attached']['js'][] = COMMERCE_PAYMILL_BRIDGE;
+  $form['credit_card']['#attached']['js'][COMMERCE_PAYMILL_BRIDGE] = array('type' => 'external');
   $form['credit_card']['#attached']['js'][] = array('data' => array('commercePaymill' => $settings), 'type' => 'setting');
   $form['credit_card']['#attached']['js'][] = drupal_get_path('module', 'commerce_paymill') . '/commerce_paymill.js';
   return $form;
