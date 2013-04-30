@@ -8,7 +8,7 @@
   Drupal.behaviors.commercePaymill = {
     attach: function(context, settings) {
       window.PAYMILL_PUBLIC_KEY = settings.commercePaymill.publicKey;
-      $('#edit-continue').bind('click', paymillSubmit);
+      $('#edit-continue').live('click', paymillSubmit);
     }
   };
 
