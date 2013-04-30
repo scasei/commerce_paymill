@@ -223,10 +223,22 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
 
   // Get current API key
   $api_key = commerce_paymill_get_key($payment_method['settings']);
+
+  // Create Commerce transaction.
+  $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
+  $transaction->instance_id = $payment_method['instance_id'];
+  $transaction->amount = $charge['amount'];
+  $transaction->currency_code = $charge['currency_code'];
+  // Set the transaction to failed per default and change that later to success.
+  $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
   
   // Get client ID  
   $client_id = commerce_paymill_get_client($order, $payment_method['settings']);
-  if (!$client_id) return FALSE;
+  if (!$client_id) {
+    $transaction->message = 'Failed to get client ID from Paymill.';
+    commerce_payment_transaction_save($transaction);
+    return FALSE;
+  }
 
   // Create payment card
   $payment_params = array(
@@ -236,7 +248,18 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
   $payment_service = new Services_Paymill_Payments($api_key, COMMERCE_PAYMILL_SERVER);
   $payment = $payment_service->create($payment_params);
   if (isset($payment['error'])) {
-    drupal_set_message(check_plain($payment['error']), 'error');
+    // The Paymill error structure is completely unknown, so only print it if we
+    // get a flat string.
+    if (is_scalar($payment['error'])) {
+      $error = check_plain($payment['error']);
+      drupal_set_message($error, 'error');
+    }
+    else {
+      $error = 'Error when creating payment: ' . check_plain(print_r($payment, TRUE));
+      drupal_set_message(t('A payment error occured, please contact the site administrator.'), 'error');
+    }
+    $transaction->message = $error;
+    commerce_payment_transaction_save($transaction);
     return FALSE;
   }
 
@@ -256,36 +279,33 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
     $response = $transaction_service->create($transaction_params);
   }
   
-  // Create Commerce transaction.
-  $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
-  $transaction->instance_id = $payment_method['instance_id'];
-  $transaction->amount = $charge['amount'];
-  $transaction->currency_code = $charge['currency_code'];
-  
-  // Set transaction status.
+  // Check for errors from the response.
   if (isset($response['error'])) {
-    $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
-    $transaction->message = check_plain($response['error']);
-  }
-  else {
-    if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
-      $transaction->status = COMMERCE_PAYMENT_STATUS_PENDING;
-      $transaction->remote_id = $response['preauthorization']['id'];
+    if (is_scalar($response['error'])) {
+      $error = check_plain($response['error']);
+      drupal_set_message($error, 'error');
     }
     else {
-      $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
-      $transaction->remote_id = $response['id'];
+      $error = 'Error when creating transaction: ' . check_plain(print_r($response, TRUE));
+      drupal_set_message(t('A transaction error occured, please contact the site administrator.'), 'error');
     }
+    $transaction->message = $error;
+    commerce_payment_transaction_save($transaction);
+    return FALSE;
+  }
+
+  // Now handle the successful payment transaction.
+  if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
+    $transaction->status = COMMERCE_PAYMENT_STATUS_PENDING;
+    $transaction->remote_id = $response['preauthorization']['id'];
+  }
+  else {
+    $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
+    $transaction->remote_id = $response['id'];
   }
 
   // Save transaction.
   commerce_payment_transaction_save($transaction);
-
-  // Check for errors from the response.
-  if (isset($response['error'])) {
-    drupal_set_message(check_plain($response['error']), 'error');
-    return FALSE;
-  }
 }
 
 function commerce_paymill_get_client($order, $settings) {
