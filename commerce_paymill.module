@@ -409,10 +409,12 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
 function commerce_paymill_get_client_id($order, $settings) {
   global $user;
 
+  $mode = $settings['mode'];
+
   // Does the current user already have a client instance?
   if (isset($user->data)) {
-    if (isset($user->data['commerce_paymill_client_id'])) {
-      return $user->data['commerce_paymill_client_id'];
+    if (isset($user->data['commerce_paymill_client_id_' . $mode])) {
+      return $user->data['commerce_paymill_client_id_' . $mode];
     }
   }
 
@@ -436,7 +438,7 @@ function commerce_paymill_get_client_id($order, $settings) {
 
   // Update current user with client ID.
   if ($user->uid > 0) {
-    $user->data['commerce_paymill_client_id'] = $client['id'];
+    $user->data['commerce_paymill_client_id_' . $mode] = $client['id'];
     $edit = array('data' => $user->data);
     user_save($user, $edit);
   }
