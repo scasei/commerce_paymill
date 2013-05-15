@@ -93,7 +93,7 @@ function commerce_paymill_settings_form($settings = NULL) {
   );
   $form[COMMERCE_PAYMILL_MODE_LIVE]['public_key'] = array(
     '#type' => 'textfield',
-    '#title' => t('Public test key'),
+    '#title' => t('Public live key'),
     '#size' => 40,
     '#maxlength' => 32,
     '#default_value' => $settings[COMMERCE_PAYMILL_MODE_LIVE]['public_key'],
