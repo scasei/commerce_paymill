@@ -53,9 +53,16 @@
       function(error, result) {
         if (error) {
           $('.paymill-error', form).val(error.apierror);
+          if (typeof error.message != "undefined") {
+            $('.paymill-error-message', form).val(error.message);
+          }
+          else {
+            $('.paymill-error-message', form).val('');
+          }
         }
         else {
           $('.paymill-error', form).val('');
+          $('.paymill-error-message', form).val('');
         }
         if (result) {
           $('.paymill-token', form).val(result.token);
