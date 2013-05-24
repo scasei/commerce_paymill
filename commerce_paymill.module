@@ -447,11 +447,22 @@ function commerce_paymill_get_client_id($order, $settings) {
     'description' => 'User:' . $order->uid,
   );
   $client = $client_service->create($client_params);
+  // @TODO : check with Paymill the format of return for this.
   if (isset($client['error'])) {
-    watchdog('commerce_paymill', 'Paymill client creation failure on the order @orderid: @return_text.', array(
-      '@orderid' => $order->order_id,
-      '@return_text' => $client['error'],
-    ), WATCHDOG_WARNING);
+    $errors = array();
+    if (isset($client['error']['messages'])) {
+      $errors = $client['error']['messages'];
+    }
+    else {
+      $errors['unknown'] = print_r($client['error'] ,TRUE);
+    }
+    foreach ($errors as $error_code => $error) {
+      watchdog('commerce_paymill', 'Paymill client creation failure on the order @orderid: [@error_code] @return_text.', array(
+        '@orderid' => $order->order_id,
+        '@error_code' => $error_code,
+        '@return_text' => $error,
+      ), WATCHDOG_WARNING);
+    }
     return FALSE;
   }
 
