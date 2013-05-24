@@ -325,10 +325,11 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
       $message = $error['transaction'];
       $remote_id = NULL;
       $status = COMMERCE_PAYMENT_STATUS_FAILURE;
-      if ($pane_values['credit_card']['error'] == '3ds_cancelled') {
-        $status = COMMERCE_PAYMENT_STATUS_CANCELED;
+
+      // Do not record transaction on 3D secure cancellation.
+      if ($pane_values['credit_card']['error'] != '3ds_cancelled') {
+        commerce_paymill_add_transaction($order, $instance_id, $amount, $currency_code, $status, $message, $remote_id);
       }
-      commerce_paymill_add_transaction($order, $instance_id, $amount, $currency_code, $status, $message, $remote_id);
     }
     if (isset($error['message'])) {
       form_set_error($name, $error['message']);
