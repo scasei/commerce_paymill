@@ -158,7 +158,8 @@ function commerce_paymill_menu() {
     'title' => 'Capture',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('commerce_paymill_capture_form', 3, 5),
-    'access arguments' => array('administer payment methods'),
+    'access callback' => 'commerce_paymill_transaction_capture_access',
+    'access arguments' => array(5),
     'type' => MENU_DEFAULT_LOCAL_TASK,
     'context' => MENU_CONTEXT_INLINE,
     'weight' => 2,
@@ -166,6 +167,87 @@ function commerce_paymill_menu() {
   );
 
   return $items;
+}
+
+/**
+ * Determines access for capture on payment transactions.
+ *
+ * @param $transaction
+ *   The payment transaction to check.
+ * @param $account
+ *   The user account attempting the operation; defaults to the current user.
+ *
+ * @return
+ *   TRUE or FALSE indicating access for the operation.
+ */
+function commerce_paymill_transaction_capture_access($transaction, $account = NULL) {
+  global $user;
+
+  if (empty($account)) {
+    $account = clone($user);
+  }
+
+  if (isset($transaction->order_id)) {
+    $order = commerce_order_load($transaction->order_id);
+    if (!$order) {
+      return FALSE;
+    }
+  }
+  else {
+    $order = NULL;
+  }
+
+  // Capture only work with paymill.
+  $payment_method = commerce_payment_method_instance_load($transaction->instance_id);
+  if ($payment_method['method_id'] != 'commerce_paymill') {
+    return FALSE;
+  }
+
+  // Capture work only for auth only transactions.
+  if ($payment_method['settings']['capture_mode'] != COMMERCE_CREDIT_AUTH_ONLY) {
+    //return FALSE;
+  }
+
+  // Can't capture without remote_id.
+  if (empty($transaction->remote_id)) {
+    return FALSE;
+  }
+
+  // Capture only pending transactions.
+  if ($transaction->status != COMMERCE_PAYMENT_STATUS_PENDING) {
+   return FALSE;
+  }
+
+  // Capture only not already captured transactions.
+  if ($transaction->remote_status != 'pending') {
+    return FALSE;
+  }
+
+  // Grant administrators access to do anything.
+  if (user_access('administer payments', $account)) {
+    return TRUE;
+  }
+
+  if (user_access('capture paymill payments', $account)) {
+    if (commerce_order_access('view', $order, $account)) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function commerce_paymill_permission() {
+  return array(
+    'capture paymill payments' => array(
+      'title' => t('Capture Paymill payments'),
+      'description' => t('Allows users to capture a payment for a order.'),
+      'restrict access' => TRUE,
+    ),
+  );
 }
 
 /**
@@ -307,7 +389,7 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
         ), WATCHDOG_WARNING);
       }
       else {
-        watchdog('commerce_paymill', 'Paymill payment failure on the order @orderid: [@code] - "@return_text" with message : @message.', array(
+        watchdog('commerce_paymill', 'Paymill payment failure on the order @orderid: [@code] - "@return_text" with message : @message', array(
             '@orderid' => $order->order_id,
             '@code' => $pane_values['credit_card']['error'],
             '@return_text' => $error['watchdog'],
@@ -706,8 +788,6 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
   $transaction->amount = $charge['amount'];
   $transaction->currency_code = $charge['currency_code'];
 
-  $error_message = '';
-
   // Set transaction status.
   if ($response['response_code'] < 20000 || $response['response_code'] >= 30000) {
     $message = commerce_paymill_get_status_message($response['response_code']);
@@ -740,6 +820,7 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
       $transaction->status = COMMERCE_PAYMENT_STATUS_PENDING;
       $transaction->remote_id = $response['preauthorization']['id'];
+      $transaction->remote_status = 'pending';
     }
     else {
       $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;

@@ -88,7 +88,8 @@ function commerce_paymill_capture_form_submit($form, &$form_state) {
     drupal_set_message(t('Prior authorization captured successfully.'));
     $transaction->amount = commerce_currency_decimal_to_amount($amount, $transaction->currency_code);
     $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
-	$transaction->remote_id = $response['id'];
+    $transaction->remote_status = 'success';
+    $transaction->remote_id = $response['id'];
   }
 
   commerce_payment_transaction_save($transaction);
