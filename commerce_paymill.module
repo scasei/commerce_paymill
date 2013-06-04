@@ -17,7 +17,6 @@ function commerce_paymill_commerce_payment_method_info() {
   $payment_methods = array();
 
   $payment_methods['commerce_paymill'] = array(
-    'base' => 'commerce_paymill',
     'title' => t('Paymill'),
     'display_title' => t('Credit card'),
     'description' => t('Provides credit card payment during checkout via Paymill.'),
@@ -128,7 +127,6 @@ function commerce_paymill_settings_form($settings = NULL) {
       '#default_value' => $settings['cardonfile'],
     );
   }
-
   else {
     $form['cardonfile'] = array(
       '#type' => 'markup',
@@ -725,9 +723,8 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
       ), WATCHDOG_WARNING);
     }
     else {
-      watchdog('commerce_paymill', 'Paymill transaction failure on the order @orderid: [@code] - @return_text.', array(
+      watchdog('commerce_paymill', 'Paymill transaction failure on the order @orderid: @return_text.', array(
         '@orderid' => $order->order_id,
-        '@code' => $response['response_code'],
         '@return_text' => $message,
       ), WATCHDOG_WARNING);
     }
