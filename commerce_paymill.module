@@ -56,6 +56,11 @@ function commerce_paymill_settings_form($settings = NULL) {
 
   $settings = (array) $settings + commerce_paymill_default_settings();
 
+  $library = libraries_detect('paymill');
+  if (!empty($library['error'])) {
+    drupal_set_message($library['error message'], 'error', FALSE);
+  }
+
   $form[COMMERCE_PAYMILL_MODE_TEST] = array(
     '#type' => 'fieldset',
     '#title' => t('Test keys'),
@@ -154,7 +159,7 @@ function commerce_paymill_menu() {
   );
 
   // Add a menu item for capturing authorizations.
-  $items['admin/commerce/orders/%commerce_order/payment/%commerce_payment_transaction/paymill-capture'] = array(
+  $items['admin/commerce/orders/%commerce_order/payment/%commerce_payment_transaction/paymill/capture'] = array(
     'title' => 'Capture',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('commerce_paymill_capture_form', 3, 5),
@@ -254,6 +259,13 @@ function commerce_paymill_permission() {
  * Payment method callback: submit form.
  */
 function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_pane, $order) {
+
+  // If Paymill library isn't loaded.
+  libraries_load('paymill');
+  if (!interface_exists('Services_Paymill_Apiclient_Interface')) {
+    drupal_set_message(t('This payment method is currently unavailable.'), 'error');
+    return array();
+  }
   module_load_include('inc', 'commerce_payment', 'includes/commerce_payment.credit_card');
   $fields = array(
     'owner' => '',
@@ -288,9 +300,8 @@ function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_p
     '#markup' => $markup,
   );
 
-  // Get order total for order.
-  $commerce_order_total = field_get_items('commerce_order', $order, 'commerce_order_total');
-  $charge = $commerce_order_total[0];
+  // Get order balance for order.
+  $charge = commerce_payment_order_balance($order);
 
   // Add hidden fields for amount/currency/Paymill token/error.
   $form['credit_card']['amount'] = array(
@@ -398,9 +409,7 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
       }
     }
     if (isset($error['transaction'])) {
-      $commerce_order_total = field_get_items('commerce_order', $order, 'commerce_order_total');
-      $amount = $commerce_order_total[0]['amount'];
-      $currency_code = $commerce_order_total[0]['currency_code'];
+      $balance = commerce_payment_order_balance($order);
       $instance_id = $payment_method['instance_id'];
       $message = $error['transaction'];
       $remote_id = NULL;
@@ -408,7 +417,7 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
 
       // Do not record transaction on 3D secure cancellation.
       if ($pane_values['credit_card']['error'] != '3ds_cancelled') {
-        commerce_paymill_add_transaction($order, $instance_id, $amount, $currency_code, $status, $message, $remote_id);
+        commerce_paymill_add_transaction($order, $instance_id, $balance['amount'], $balance['currency_code'], $status, $message, $remote_id);
       }
     }
     if (isset($error['message'])) {
@@ -534,7 +543,7 @@ function commerce_paymill_get_client_id($order, $settings) {
       $errors = $client['error']['messages'];
     }
     else {
-      $errors['unknown'] = print_r($client['error'] ,TRUE);
+      $errors['unknown'] = print_r($client['error'], TRUE);
     }
     foreach ($errors as $error_code => $error) {
       watchdog('commerce_paymill', 'Paymill client creation failure on the order @orderid: [@error_code] @return_text.', array(
@@ -766,20 +775,37 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     return FALSE;
   }
 
+  if (empty($charge)) {
+    $charge = commerce_payment_order_balance($order);
+  }
+
   // Create transaction/preauth
   $transaction_params = array(
     'amount' => $charge['amount'],
     'currency' => $charge['currency_code'],
     'payment' => $payment_id,
   );
+
+  $original_response = array();
   if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
     $preauthorization_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER);
     $response = $preauthorization_service->create($transaction_params);
+    if (method_exists($preauthorization_service, 'getResponse')) {
+      $original_response = $preauthorization_service->getResponse();
+    }
   }
   else {
     $transaction_service = new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
     $transaction_params['description'] = 'Order:' . $order->order_id;
     $response = $transaction_service->create($transaction_params);
+    $original_response = $transaction_service->getResponse();
+    if (method_exists($transaction_service, 'getResponse')) {
+      $original_response = $transaction_service->getResponse();
+    }
+  }
+
+  if (!isset($response['response_code']) && isset($original_response['response_code'])) {
+    $response = $original_response;
   }
 
   // Create Commerce transaction.
@@ -795,7 +821,6 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
     $transaction->message = $message;
     if ($response['response_code']) {
-
       watchdog('commerce_paymill', 'Paymill transaction failure on the order @orderid: [@code] - @return_text.', array(
         '@orderid' => $order->order_id,
         '@code' => $response['response_code'],
