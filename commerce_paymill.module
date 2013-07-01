@@ -557,9 +557,11 @@ function commerce_paymill_get_client_id($order, $settings) {
 
   // Update current user with client ID.
   if ($user->uid > 0) {
-    $user->data['commerce_paymill_client_id_' . $mode] = $client['id'];
-    $edit = array('data' => $user->data);
-    user_save($user, $edit);
+    // We should not save global user.
+    $user_entity = user_load($user->uid);
+    $user_entity->data['commerce_paymill_client_id'] = $client['id'];
+    $edit = array('data' => $user_entity->data);
+    user_save($user_entity, $edit);
   }
 
   return $client['id'];
