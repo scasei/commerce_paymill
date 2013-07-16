@@ -805,8 +805,8 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     }
   }
 
-  if (!isset($response['response_code']) && isset($original_response['response_code'])) {
-    $response = $original_response;
+  if (!isset($response['response_code']) && isset($original_response['body']['data']['response_code'])) {
+    $response = $original_response['body']['data'];
   }
 
   // Create Commerce transaction.
