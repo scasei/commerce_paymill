@@ -220,7 +220,7 @@ function commerce_paymill_transaction_capture_access($transaction, $account = NU
 
   // Capture only pending transactions.
   if ($transaction->status != COMMERCE_PAYMENT_STATUS_PENDING) {
-   return FALSE;
+    return FALSE;
   }
 
   // Capture only not already captured transactions.
@@ -368,6 +368,11 @@ function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_p
 /**
  * Create a Drupal Commerce transaction.
  */
+
+/**
+ * @TODO Transaction creation can be abstracted. Avoid code duplication.
+ *
+ */
 function commerce_paymill_add_transaction($order, $instance_id, $amount, $currency_code, $status, $message, $remote_id) {
   $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
   $transaction->instance_id = $instance_id;
@@ -394,18 +399,18 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
     if (isset($error['watchdog'])) {
       if (empty($pane_values['credit_card']['error-message'])) {
         watchdog('commerce_paymill', 'Paymill payment failure on the order @orderid: [@code] - "@return_text"', array(
-          '@orderid' => $order->order_id,
-          '@code' => $pane_values['credit_card']['error'],
-          '@return_text' => $error['watchdog'],
-        ), WATCHDOG_WARNING);
+                   '@orderid' => $order->order_id,
+                   '@code' => $pane_values['credit_card']['error'],
+                   '@return_text' => $error['watchdog'],
+                 ), WATCHDOG_WARNING);
       }
       else {
         watchdog('commerce_paymill', 'Paymill payment failure on the order @orderid: [@code] - "@return_text" with message : @message', array(
-            '@orderid' => $order->order_id,
-            '@code' => $pane_values['credit_card']['error'],
-            '@return_text' => $error['watchdog'],
-            '@message' => $pane_values['credit_card']['error-message'],
-        ), WATCHDOG_WARNING);
+                   '@orderid' => $order->order_id,
+                   '@code' => $pane_values['credit_card']['error'],
+                   '@return_text' => $error['watchdog'],
+                   '@message' => $pane_values['credit_card']['error-message'],
+                 ), WATCHDOG_WARNING);
       }
     }
     if (isset($error['transaction'])) {
@@ -478,9 +483,9 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
     if (isset($payment['error'])) {
       drupal_set_message(t('There was an error with your payment. Please try again or contact us for assistance.'), 'error');
       watchdog('commerce_paymill', 'Paymill payment failure on the order @orderid: @return_text.', array(
-          '@orderid' => $order->order_id,
-          '@return_text' => check_plain($payment['error']),
-        ), WATCHDOG_WARNING);
+                 '@orderid' => $order->order_id,
+                 '@return_text' => check_plain($payment['error']),
+               ), WATCHDOG_WARNING);
       return FALSE;
     }
 
@@ -547,10 +552,10 @@ function commerce_paymill_get_client_id($order, $settings) {
     }
     foreach ($errors as $error_code => $error) {
       watchdog('commerce_paymill', 'Paymill client creation failure on the order @orderid: [@error_code] @return_text.', array(
-        '@orderid' => $order->order_id,
-        '@error_code' => $error_code,
-        '@return_text' => $error,
-      ), WATCHDOG_WARNING);
+                 '@orderid' => $order->order_id,
+                 '@error_code' => $error_code,
+                 '@return_text' => $error,
+               ), WATCHDOG_WARNING);
     }
     return FALSE;
   }
@@ -809,6 +814,10 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     $response = $original_response['body']['data'];
   }
 
+  /**
+   * @TODO Transaction creation can be abstracted. Avoid code duplication.
+   *
+   */
   // Create Commerce transaction.
   $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
   $transaction->instance_id = $payment_method['instance_id'];
@@ -821,18 +830,22 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     $message = isset($message) ? $message : check_plain($response['error']);
     $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
     $transaction->message = $message;
+    /**
+     * @TODO refactor the error checking code. Can be abstracted on a function.
+     *       prefix with _ to not pollute the namespace.
+     */
     if ($response['response_code']) {
       watchdog('commerce_paymill', 'Paymill transaction failure on the order @orderid: [@code] - @return_text.', array(
-        '@orderid' => $order->order_id,
-        '@code' => $response['response_code'],
-        '@return_text' => $message,
-      ), WATCHDOG_WARNING);
+                 '@orderid' => $order->order_id,
+                 '@code' => $response['response_code'],
+                 '@return_text' => $message,
+               ), WATCHDOG_WARNING);
     }
     else {
       watchdog('commerce_paymill', 'Paymill transaction failure on the order @orderid: @return_text.', array(
-        '@orderid' => $order->order_id,
-        '@return_text' => $message,
-      ), WATCHDOG_WARNING);
+                 '@orderid' => $order->order_id,
+                 '@return_text' => $message,
+               ), WATCHDOG_WARNING);
     }
 
     drupal_set_message(t('There was an error with your payment. Please try again or contact us for assistance.'), 'error');
@@ -857,12 +870,17 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
   // Save transaction.
   commerce_payment_transaction_save($transaction);
 
+  /**
+   * @TODO refactor the error checking code. Can be abstracted on a function.
+   *       prefix with _ to not pollute the namespace.
+   */
+
   // Check for errors from the response.
   if (isset($response['error'])) {
     watchdog('commerce_paymill', 'Paymill transaction failure on the order @orderid: @return_text.', array(
-        '@orderid' => $order->order_id,
-        '@return_text' => $response['error'],
-      ), WATCHDOG_WARNING);
+               '@orderid' => $order->order_id,
+               '@return_text' => $response['error'],
+             ), WATCHDOG_WARNING);
     drupal_set_message(t('There was an error with your payment. Please try again or contact us for assistance.'), 'error');
     return FALSE;
   }
