@@ -139,6 +139,36 @@ function commerce_paymill_settings_form($settings = NULL) {
     );
   }
 
+  // Proxy settings for the API client.
+  $form['proxy_settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Proxy settings'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  // Proxy type: HTTP is the default.
+  $form['proxy_settings']['proxy_type'] = array(
+    '#type' => 'radios',
+    '#title' => t('Type of proxy'),
+    '#options' => array(
+      t('HTTP'),
+      t('SOCKS5'),),
+    '#description' => t('Indicate the type of proxy'),
+    '#default_value' => 0,
+  );
+
+  // Proxy type: HTTP is the default.
+  $form['proxy_settings']['proxy_type'] = array(
+    '#type' => 'radios',
+    '#title' => t('Type of proxy'),
+    '#options' => array(
+      CURLPROXY_HTTP => t('HTTP'),
+      CURLPROXY_SOCKS => t('SOCKS5'),),
+    '#description' => t('Indicate the type of proxy'),
+    '#default_value' => CURLPROXY_HTTP,
+  );
+
   return $form;
 }
 
@@ -273,7 +303,7 @@ function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_p
   );
   $default = array();
   $form = commerce_payment_credit_card_form($fields, $default);
-
+  dd($form);
   // Add a class name for each fields of the credit card form.
   foreach($form['credit_card'] as $field_name => $field_info) {
     if ($field_name[0] != '#') {
@@ -442,7 +472,7 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
  */
 function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge) {
   $order->data['commerce_paymill'] = $pane_values;
-
+  dd($payment_method['settings'], 'ps');
   // Include Paymill libraries.
   libraries_load('paymill');
 
@@ -504,6 +534,9 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
         'card_exp_year' => $payment['expire_year'],
         'status' => 1,
       );
+
+      dd($payment, 'pd');
+      dd($card_data, 'cd');
       commerce_cardonfile_save($card_data);
     }
   }
@@ -705,7 +738,7 @@ function commerce_paymill_libraries_info() {
     'version arguments' => array(
       'file' => 'lib/Services/Paymill/Apiclient/Curl.php',
       'pattern' => '@Paymill-php/([0-9\.]+)@',
-      'lines' => 40,
+      'lines' => 45,
     ),
     'files' => array(
       'php' => array(
