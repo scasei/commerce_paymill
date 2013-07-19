@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Administrative functions for Paymill
+ * Paymill settings forms callbacks.
  */
 
 /**
@@ -29,9 +29,9 @@ function commerce_paymill_capture_form($form, &$form_state, $order, $transaction
   $default_amount = commerce_currency_amount_to_decimal($default_amount, $transaction->currency_code);
 
   $description = implode('<br />', array(
-    t('Authorization: @amount', array('@amount' => commerce_currency_format($transaction->amount, $transaction->currency_code))),
-    t('Order balance: @balance', array('@balance' => commerce_currency_format($balance['amount'], $balance['currency_code']))),
-  ));
+                           t('Authorization: @amount', array('@amount' => commerce_currency_format($transaction->amount, $transaction->currency_code))),
+                           t('Order balance: @balance', array('@balance' => commerce_currency_format($balance['amount'], $balance['currency_code']))),
+                         ));
 
   $form['amount'] = array(
     '#type' => 'textfield',
@@ -42,7 +42,8 @@ function commerce_paymill_capture_form($form, &$form_state, $order, $transaction
     '#size' => 16,
   );
 
-  $form = confirm_form($form,
+  $form = confirm_form(
+    $form,
     t('What amount do you want to capture?'),
     'admin/commerce/orders/' . $order->order_id . '/payment',
     '',
@@ -120,19 +121,21 @@ function commerce_paymill_configure() {
   $action = $rule->actions()->current();
   if (empty($action)) {
     drupal_set_message(t('No actions exist for the default payment rule configuration'), 'warning');
-    $goto = sprintf(
-      'admin/commerce/config/payment-methods/manage/%d',
-      $rule->id
+    drupal_goto(
+      sprintf(
+        'admin/commerce/config/payment-methods/manage/%d',
+        $rule->id
+      )
     );
-    drupal_goto($goto);
     return;
   }
 
   // Redirect user to configuration page.
-  $goto = sprintf(
-    'admin/commerce/config/payment-methods/manage/%s/edit/%d',
-    $rule->name,
-    $action->elementId()
+  drupal_goto(
+    sprintf(
+      'admin/commerce/config/payment-methods/manage/%s/edit/%d',
+      $rule->name,
+      $action->elementId()
+    )
   );
-  drupal_goto($goto);
 }
