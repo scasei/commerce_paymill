@@ -11,7 +11,7 @@ All development happens on the 2.x branch. The 1.x branch is
 
 ## Features
 
- 1. **multiple currencies**
+ 1. **multiple currencies** support.
  2. **pre-authorization** and **capture** &mdash; thus avoiding refund
     charges for you as a merchant in the case of a return by a
     customer, also allowing complete control of order balancing.    
