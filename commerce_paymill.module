@@ -169,6 +169,46 @@ function commerce_paymill_settings_form($settings = NULL) {
     '#default_value' => CURLPROXY_HTTP,
   );
 
+  $form['proxy_settings']['proxy_host'] = array(
+    '#type' => 'textfield',
+    '#title' => t('The proxy host'),
+    '#description' => t('The host of the proxy'),
+  );
+
+  $form['proxy_settings']['proxy_port'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Proxy port'),
+    '#description' => t('The proxy port'),
+    '#default_value' => 8080,
+    '#size' => 5,
+  );
+
+  $form['proxy_settings']['proxy_user'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Proxy user'),
+    '#description' => t('The user of the proxy'),
+    '#default_value' => '',
+    '#maxlength' => 40,
+    '#size' => 40,
+    '#required' => FALSE,
+  );
+
+  $form['proxy_settings']['proxy_pass'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Proxy password'),
+    '#description' => t('The password of the proxy user'),
+    '#default_value' => '',
+    '#size' => 40,
+  );
+
+  $form['proxy_settings']['proxy_tunnel'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Proxy tunnel'),
+    '#description' => t('Check if the connection should be tunneled (CONNECT)'),
+    '#default_value' => FALSE,
+  );
+
+
   return $form;
 }
 
