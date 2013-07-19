@@ -49,6 +49,38 @@ function commerce_paymill_default_settings() {
 }
 
 /**
+ * Implements hook_menu().
+ */
+function commerce_paymill_menu() {
+  $items = array();
+
+  // Add a menu item for configuring the detail payment rule
+  $items['admin/settings/commerce-paymill'] = array(
+    'title' => 'Commerce Paymill Configuration',
+    'description' => 'Configure the Commerce Paymill module',
+    'page callback' => 'commerce_paymill_configure',
+    'access arguments' => array('administer payment methods'),
+    'type' => MENU_CALLBACK,
+    'file' => 'commerce_paymill.admin.inc',
+  );
+
+  // Add a menu item for capturing authorizations.
+  $items['admin/commerce/orders/%commerce_order/payment/%commerce_payment_transaction/paymill/capture'] = array(
+    'title' => 'Capture',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('commerce_paymill_capture_form', 3, 5),
+    'access callback' => 'commerce_paymill_transaction_capture_access',
+    'access arguments' => array(5),
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'context' => MENU_CONTEXT_INLINE,
+    'weight' => 2,
+    'file' => 'commerce_paymill.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
  * Implements hook_settings_form().
  */
 function commerce_paymill_settings_form($settings = NULL) {
@@ -139,6 +171,22 @@ function commerce_paymill_settings_form($settings = NULL) {
     );
   }
 
+  // Add proxy settings to the form.
+  _commerce_paymill_proxy_settings_form($form);
+
+  return $form;
+}
+
+/**
+ * Sets the proxy related part of the module settings form.
+ *
+ * @param array $form
+ *   The form to be populated with the proxy data fields.
+ * @return nothing
+ *   Side effects only.
+ */
+function _commerce_paymill_proxy_settings_form(&$form) {
+
   // Proxy settings for the API client.
   $form['proxy_settings'] = array(
     '#type' => 'fieldset',
@@ -152,26 +200,16 @@ function commerce_paymill_settings_form($settings = NULL) {
     '#type' => 'radios',
     '#title' => t('Type of proxy'),
     '#options' => array(
-      t('HTTP'),
-      t('SOCKS5'),),
-    '#description' => t('Indicate the type of proxy'),
-    '#default_value' => 0,
-  );
-
-  // Proxy type: HTTP is the default.
-  $form['proxy_settings']['proxy_type'] = array(
-    '#type' => 'radios',
-    '#title' => t('Type of proxy'),
-    '#options' => array(
       CURLPROXY_HTTP => t('HTTP'),
-      CURLPROXY_SOCKS => t('SOCKS5'),),
+      CURLPROXY_SOCKS5 => t('SOCKS5'),),
     '#description' => t('Indicate the type of proxy'),
     '#default_value' => CURLPROXY_HTTP,
   );
 
+  // Proxy host (or IP address to circumvent name resolution).
   $form['proxy_settings']['proxy_host'] = array(
     '#type' => 'textfield',
-    '#title' => t('The proxy host'),
+    '#title' => t('The proxy host - hostname or IP'),
     '#description' => t('The host of the proxy'),
   );
 
@@ -180,27 +218,31 @@ function commerce_paymill_settings_form($settings = NULL) {
     '#title' => t('Proxy port'),
     '#description' => t('The proxy port'),
     '#default_value' => 8080,
+    '#element_validate' => array('element_validate_number'),
     '#size' => 5,
   );
 
+  // Proxy user if authentication is in place.
   $form['proxy_settings']['proxy_user'] = array(
     '#type' => 'textfield',
     '#title' => t('Proxy user'),
-    '#description' => t('The user of the proxy'),
+    '#description' => t('The user for proxy authentication'),
     '#default_value' => '',
     '#maxlength' => 40,
     '#size' => 40,
     '#required' => FALSE,
   );
 
+  // Proxy user if authentication is in place.
   $form['proxy_settings']['proxy_pass'] = array(
     '#type' => 'textfield',
     '#title' => t('Proxy password'),
-    '#description' => t('The password of the proxy user'),
+    '#description' => t('The password for proxy authentication'),
     '#default_value' => '',
     '#size' => 40,
   );
 
+  // If the proxy connection should be tunneled (HTTP CONNECT method).
   $form['proxy_settings']['proxy_tunnel'] = array(
     '#type' => 'checkbox',
     '#title' => t('Proxy tunnel'),
@@ -208,41 +250,7 @@ function commerce_paymill_settings_form($settings = NULL) {
     '#default_value' => FALSE,
   );
 
-
-  return $form;
-}
-
-/**
- * Implements hook_menu().
- */
-function commerce_paymill_menu() {
-  $items = array();
-
-  // Add a menu item for configuring the detail payment rule
-  $items['admin/settings/commerce-paymill'] = array(
-    'title' => 'Commerce Paymill Configuration',
-    'description' => 'Configure the Commerce Paymill module',
-    'page callback' => 'commerce_paymill_configure',
-    'access arguments' => array('administer payment methods'),
-    'type' => MENU_CALLBACK,
-    'file' => 'commerce_paymill.admin.inc',
-  );
-
-  // Add a menu item for capturing authorizations.
-  $items['admin/commerce/orders/%commerce_order/payment/%commerce_payment_transaction/paymill/capture'] = array(
-    'title' => 'Capture',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('commerce_paymill_capture_form', 3, 5),
-    'access callback' => 'commerce_paymill_transaction_capture_access',
-    'access arguments' => array(5),
-    'type' => MENU_DEFAULT_LOCAL_TASK,
-    'context' => MENU_CONTEXT_INLINE,
-    'weight' => 2,
-    'file' => 'commerce_paymill.admin.inc',
-  );
-
-  return $items;
-}
+} // _commerce_paymill_proxy_settings_form
 
 /**
  * Determines access for capture on payment transactions.
@@ -343,7 +351,7 @@ function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_p
   );
   $default = array();
   $form = commerce_payment_credit_card_form($fields, $default);
-  dd($form);
+
   // Add a class name for each fields of the credit card form.
   foreach($form['credit_card'] as $field_name => $field_info) {
     if ($field_name[0] != '#') {
@@ -512,7 +520,7 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
  */
 function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge) {
   $order->data['commerce_paymill'] = $pane_values;
-  dd($payment_method['settings'], 'ps');
+
   // Include Paymill libraries.
   libraries_load('paymill');
 
@@ -575,8 +583,6 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
         'status' => 1,
       );
 
-      dd($payment, 'pd');
-      dd($card_data, 'cd');
       commerce_cardonfile_save($card_data);
     }
   }
