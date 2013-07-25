@@ -38,7 +38,7 @@ module.
     **multisite** install and you want to make it available for a
     given `sitename` do:
     
-       drush paymill sites/<sitename>/libraries 
+        drush paymill sites/<sitename>/libraries 
               
  3. Get a [paymill](https://paymill.com) account and configure the
     payment rule at `admin/commerce/config/payment-methods`. 
