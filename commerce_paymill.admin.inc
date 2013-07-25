@@ -73,21 +73,25 @@ function commerce_paymill_capture_form_submit($form, &$form_state) {
   // Attempt capture using Paymill.
   $transaction_service = new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
   $transaction_params = array(
-    'amount' => $amount,
+    'amount' => commerce_currency_decimal_to_amount(
+      $amount,
+      $transaction->currency_code),
     'currency' => $transaction->currency_code,
     'preauthorization' => $transaction->remote_id,
     'description' => 'Order:' . $order->order_id,
   );
+
   $response = $transaction_service->create($transaction_params);
 
-  // Write transaction status.
+  // Write the transaction status.
   if (isset($response['error'])) {
     drupal_set_message(t('Prior authorization capture failed, so the transaction will remain in a pending status.'), 'error');
     drupal_set_message(check_plain($response['error']), 'error');
   }
   else {
     drupal_set_message(t('Prior authorization captured successfully.'));
-    $transaction->amount = commerce_currency_decimal_to_amount($amount, $transaction->currency_code);
+
+    $transaction->amount = $response['amount'];
     $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
     $transaction->remote_status = 'success';
     $transaction->remote_id = $response['id'];
