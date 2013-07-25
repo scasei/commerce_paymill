@@ -24,12 +24,34 @@ the **2.x** version of the
 [`commerce_cardonfile`](https://drupal.org/project/commerce_cardonfile)
 module.
 
+## Installation 
+
+ 1. Download and enable the module.
+
+ 2. Use the drush command to download the PHP library from
+    [github](https://github.com/paymill/paymill-php).
+    
+        drush paymill <directory>
+        
+    where `directory` is the directory where the module should be
+    installed. By default is `sites/all/modules`, if on a
+    **multisite** install and you want to make it available for a
+    given `sitename` do:
+    
+       drush paymill sites/<sitename>/libraries 
+              
+ 3. Get a [paymill](https://paymill.com) account and configure the
+    payment rule at `admin/commerce/config/payment-methods`. 
+    
+ 4. Configure the payment rule (the `edit` link) with your keys.   
+   
+ 5. Done.  
+   
 ## Roadmap
 
  1. Release **2.1** will have all of the above and:
   + proxy support for sites that use a forward proxy to whitelist
     server to server calls as a security measure.
-  + [drush](http://drush.ws) command to download and update the library.
   + informative translatable error messages for the client when an
     error occurs.
     

@@ -1,46 +1,65 @@
+Commerce Paymill
+================
 
-CONTENTS OF THIS FILE
----------------------
-
- * Introduction
- * Installation
- * Possible future features
-
-
-INTRODUCTION
+Introduction
 ------------
 
-Current Maintainer: Gareth Oakley <gaz at gazoakley dot com>
+Commerce Paymill is Drupal Commerce module that integrates
+the [Paymill](https://paymill.com) payement gateway into your Drupal
+Commerce shop.
 
-This repository contains a basic Drupal Commerce payment module for the Paymill
-payment service: http://www.paymill.com/
+All development happens on the 2.x branch. The 1.x branch is
+*unmaintained* and will have no further releases.
 
+Features
+--------
 
-INSTALLATION
+1.  multiple currencies support.
+2.  pre-authorization and capture — thus avoiding refund charges
+    for you as a merchant in the case of a return by a customer, also
+    allowing complete control of order balancing.\
+3.  card on file functionality that allows for you securely to
+    charge a client card without having to deal with the huge hassle of
+    storing credit card numbers.
+
+Note that to enable the card on file funcionality you need to install
+the 2.x version of the commerce_cardonfile module.
+
+Installation
 ------------
 
-1. This module requires the Curl PHP extension.
-   In most cases, you can simply run "apt-get install php5-curl".
+1.  Download and enable the module.
 
-2. Copy the Commerce_Paymill/ directory to your sites/SITENAME/modules
-   directory.
+2.  Use the drush command to download the PHP library from
+    [github](https://github.com/paymill/paymill-php).
 
-3. Create a libraries directory under sites/SITENAME if it does not exist.
+        drush paymill <directory>
 
-4. Create a paymill directory under sites/SITENAME/libraries.
+    where `directory` is the directory where the module should be
+    installed. By default is `sites/all/modules`, if on a **multisite**
+    install and you want to make it available for a given `sitename` do:
 
-5. Download the Paymill PHP libraries from GitHub:
-   https://github.com/Paymill/Paymill-PHP/archive/master.zip
+    drush paymill sites/<sitename>/libraries
 
-6. Copy the contents of the zip file into sites/SITENAME/libraries/paymill
-   README.md should exist in this directory
+3.  Get a [paymill](https://paymill.com) account and configure the
+    payment rule at `admin/commerce/config/payment-methods`.
 
-7. Enable the module and configure admin/settings/commerce-paymill.
+4.  Configure the payment rule (the `edit` link) with your keys.
 
+5.  Done.
 
-POSSIBLE FUTURE FEATURES
-------------------------
+Roadmap
+-------
 
-* Pre-authorization only
-* Stored cards
-* Client information
+1.  Release 2.1 will have all of the above and:
+
+-   proxy support for sites that use a forward proxy to whitelist server
+    to server calls as a security measure.
+-   informative translatable error messages for the client when an error
+    occurs.
+
+2.  Release 2.2 adds extensive logging for security and analytics.
+
+Development of the module is sponsored by
+[CommerceGuys](http://commerceguys.com) and
+[Paymill](https://paymill.com).
