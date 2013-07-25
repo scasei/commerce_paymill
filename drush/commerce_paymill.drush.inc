@@ -5,10 +5,12 @@
  *   drush integration for paymill.
  */
 
-/**
- * The Paymill plugin URI.
- */
+
+// The Paymill library download URI.
 define('PAYMILL_DOWNLOAD_URI', 'https://github.com/Paymill/Paymill-PHP/archive/master.zip');
+// The default path for installing the library.
+define('COMMERCE_PAYMILL_LIBRARY_DEFAULT_PATH',
+       sprintf('sites%sall%slibraries', DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR));
 
 /**
  * Implements hook_drush_command().
@@ -28,13 +30,14 @@ define('PAYMILL_DOWNLOAD_URI', 'https://github.com/Paymill/Paymill-PHP/archive/m
 function commerce_paymill_drush_command() {
   $items = array();
 
-  // the key in the $items array is the name of the command.
+  // The command requires no level of bootstrap whatsoever.
   $items['paymill-library'] = array(
     'callback' => 'drush_commerce_paymill_library',
-    'description' => dt("Downloads the Paymill library."),
-    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH, // No bootstrap.
+    'description' => dt('Downloads the Paymill library.'),
+    'bootstrap' => DRUSH_BOOTSTRAP_DRUSH,
     'arguments' => array(
-      'path' => dt('Optional. A path where to install the Paymill library. If omitted Drush will use the default location.'),
+      'path' => dt('Optional. A path where to install the Paymill library. If omitted Drush will use the default location: @default_path',
+                   array('default_path' => COMMERCE_PAYMILL_LIBRARY_DEFAULT_PATH)),
     ),
     'aliases' => array('paymill'),
   );
@@ -57,7 +60,9 @@ function commerce_paymill_drush_command() {
 function commerce_paymill_drush_help($section) {
   switch ($section) {
     case 'drush:paymill-library':
-      return dt("Downloads the Paymill library from github default location is sites/all/libraries.");
+      return dt('Downloads the Paymill library from github, default location is @default_path.',
+                array('@default_path' => COMMERCE_PAYMILL_LIBRARY_DEFAULT_PATH)
+      );
   }
 }
 
@@ -74,13 +79,13 @@ function drush_commerce_paymill_library() {
     $path = check_plain($args[0]);
   }
   else {
-    $path = sprintf('sites%sall%slibraries', DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR);
+    $path = COMMERCE_PAYMILL_LIBRARY_DEFAULT_PATH;
   }
 
   // Create the path if it does not exist.
   if (!is_dir($path)) {
     drush_op('mkdir', $path);
-    drush_log(dt('Directory @path was created', array('@path' => $path)), 'notice');
+    drush_log(dt('Directory @path was created.', array('@path' => $path)), 'notice');
   }
 
   // Set the directory to the download location.
@@ -119,17 +124,17 @@ function drush_commerce_paymill_library() {
   // Check if the destination library exists. if it does remove it to begin
   // with a clean slate.
   if (is_dir($dest) && !drush_shell_exec(sprintf('rm -fr %s', $dest))) {
-    drush_log(dt('Cannot remove existing library at @dest', array('@dest' => $dest)), 'error');
+    drush_log(dt('Cannot remove existing library at @dest.', array('@dest' => $dest)), 'error');
   }
 
   // Install the library.
   if (is_dir($dirname)
       &&
       drush_shell_exec(sprintf('mv %s %s', $dirname, $dest))) {
-    drush_log(dt('Paymill library has been downloaded to @path', array('@path' => $path)), 'success');
+    drush_log(dt('Paymill library has been downloaded to @path.', array('@path' => $path)), 'success');
   }
   else {
-    drush_log(dt('Drush was unable to download the Paymill library to @path', array('@path' => $path)), 'error');
+    drush_log(dt('Drush was unable to download the Paymill library to @path.', array('@path' => $path)), 'error');
   }
 }
 
