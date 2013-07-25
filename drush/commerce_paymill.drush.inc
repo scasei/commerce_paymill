@@ -113,14 +113,19 @@ function drush_commerce_paymill_library() {
 
   // The full dirname.
   $dirname = $path . DIRECTORY_SEPARATOR . $dirname;
+  // The destination directory.
+  $dest = sprintf('%s%s%s', $path, DIRECTORY_SEPARATOR, 'paymill');
+
+  // Check if the destination library exists. if it does remove it to begin
+  // with a clean slate.
+  if (is_dir($dest) && !drush_shell_exec(sprintf('rm -fr %s', $dest))) {
+    drush_log(dt('Cannot remove existing library at @dest', array('@dest' => $dest)), 'error');
+  }
+
   // Install the library.
   if (is_dir($dirname)
       &&
-      drush_shell_exec(sprintf('mv %s %s%s%s',
-                               $dirname,
-                               $path,
-                               DIRECTORY_SEPARATOR,
-                               'paymill'))) {
+      drush_shell_exec(sprintf('mv %s %s', $dirname, $dest))) {
     drush_log(dt('Paymill library has been downloaded to @path', array('@path' => $path)), 'success');
   }
   else {
