@@ -33,13 +33,32 @@ function commerce_paymill_capture_form($form, &$form_state, $order, $transaction
                            t('Order balance: @balance', array('@balance' => commerce_currency_format($balance['amount'], $balance['currency_code']))),
                          ));
 
+  // Store the authorized amount as a value so that we can validate the amount to
+  // capture below.
+  $form['maximum_amount'] = array(
+    '#type' => 'value',
+    '#value' => commerce_currency_amount_to_decimal(min($balance['amount'], $transaction->amount),
+                                                    $transaction->currency_code),
+  );
+
+  // The amount to capture.
   $form['amount'] = array(
     '#type' => 'textfield',
     '#title' => t('Capture amount'),
     '#description' => filter_xss($description),
     '#default_value' => $default_amount,
     '#field_suffix' => check_plain($transaction->currency_code),
+    '#element_validate' => array('element_validate_number',
+                                 'commerce_paymill_capture_amount_validate'),
     '#size' => 16,
+  );
+
+  // @todo: Remove this when multiple capture will work.
+  $form['capture_amount_warning'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<div style="color: red; font-size: 1.2em;">',
+    '#suffix' => '</div>',
+    '#markup' => t('Currently is not possible to do multiple captures. Capture <strong>always</strong> the full <strong>needed</strong> amount.'),
   );
 
   $form = confirm_form(
@@ -54,6 +73,30 @@ function commerce_paymill_capture_form($form, &$form_state, $order, $transaction
 
   return $form;
 }
+
+/**
+ * Element validator for the amount to capture.
+ *
+ * @param array $element
+ *   The element that we're validating.
+ * @param array $form_state
+ *   The current form state.
+ * @return nothing
+ *   Side effects only.
+ */
+function commerce_paymill_capture_amount_validate($element, $form_state) {
+  // We only capture positive amounts. Safeguard.
+  if ($form_state['values']['amount'] < 0) {
+    form_error($element, t('The value to capture must be positive.'));
+  }
+  // The value to capture cannot exceed the minimum between the order balance
+  // and the authorized amount.
+  if ($form_state['values']['amount'] > $form_state['values']['maximum_amount']) {
+    form_error($element, t('The value to capture cannot be greater than @val.',
+                           array('@val' => $form_state['values']['maximum_amount'])
+               ));
+  }
+} // commerce_paymill_capture_amount_validate
 
 /**
  * Submit handler: process a transaction for the authorized amount.
