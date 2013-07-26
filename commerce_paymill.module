@@ -155,19 +155,13 @@ function commerce_paymill_settings_form($settings = NULL) {
     '#default_value' => $settings['capture_mode'],
   );
 
-  // Card on File module support.
-  if (module_exists('commerce_cardonfile')) {
+  // Card on File support if available.
+  if (commerce_paymill_has_cardonfile()) {
     $form['cardonfile'] = array(
       '#type' => 'checkbox',
       '#title' => t('Enable Card on File functionality with this payment method.'),
       '#description' => t('Stores tokenised value for card data.'),
       '#default_value' => $settings['cardonfile'],
-    );
-  }
-  else {
-    $form['cardonfile'] = array(
-      '#type' => 'markup',
-      '#markup' => t('To enable Card on File funcitionality download and install the Card on File 2.x module.'),
     );
   }
 
@@ -469,7 +463,7 @@ function commerce_paymill_add_transaction($order, $instance_id, $amount, $curren
  */
 function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pane_values, $order, $form_parents = array()) {
   $name = implode('][', $form_parents) . ']';
-  $cardonfile_capable = module_exists('commerce_cardonfile') && !empty($payment_method['settings']['cardonfile']);
+  $cardonfile_capable = commerce_paymill_has_cardonfile(!empty($payment_method['settings']['cardonfile']));
 
   if (!empty($pane_values['credit_card']['error'])) {
     $error = commerce_paymill_get_error($pane_values['credit_card']['error']);
@@ -534,7 +528,7 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
     return FALSE;
   }
 
-  $cardonfile_capable = module_exists('commerce_cardonfile') && !empty($payment_method['settings']['cardonfile']);
+  $cardonfile_capable = commerce_paymill_has_cardonfile(!empty($payment_method['settings']['cardonfile']));
 
   $payment_id = FALSE;
   if ($cardonfile_capable) {
@@ -551,7 +545,7 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
   }
 
   if (empty($payment_id)) {
-    // Create payment card
+    // Create payment card card on file instance.
     $payment_params = array(
       'token' => $pane_values['credit_card']['token'],
       'client' => $client_id,
@@ -851,10 +845,10 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
   // Include Paymill libraries.
   libraries_load('paymill');
 
-  // Get current API key
+  // Get current API key.
   $api_key = commerce_paymill_get_key($payment_method['settings']);
 
-  // Get client ID
+  // Get client ID.
   $client_id = commerce_paymill_get_client_id($order, $payment_method['settings']);
   if (!$client_id) {
     drupal_set_message(t('There was an error with your payment. Please try again or contact us for assistance.'), 'error');
@@ -964,3 +958,23 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     return FALSE;
   }
 }
+
+/**
+ * Predicate for testing if the commerce_cardonfile module is enabled and is
+ * the version 2.x.
+ *
+ * @param boolean $extra_condition
+ *   Additional condition. Used if we're checking a form field.
+ * @return boolean
+ *   TRUE if it does FALSE if not.
+ */
+function commerce_paymill_has_cardonfile($extra_condition = TRUE) {
+  // The commerce_cardonfile_commerce_checkout_form_submit function exists
+  // only on the 2.x branch.
+  return
+    module_exists('commerce_cardonfile')
+    &&
+    function_exists('commerce_cardonfile_commerce_checkout_form_submit')
+    &&
+    $extra_condition;
+} // commerce_paymill_has_cardonfile
