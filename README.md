@@ -49,13 +49,13 @@ module.
    
 ## Roadmap
 
- 1. Release **2.1** will have all of the above and:
+ 1. Release **2.2** will have all of the above and:
   + proxy support for sites that use a forward proxy to whitelist
     server to server calls as a security measure.
   + informative translatable error messages for the client when an
     error occurs.
     
- 2. Release **2.2** adds extensive logging for security and analytics.
+ 2. Release **2.3** adds extensive logging for security and analytics.
  
 Development of the module is sponsored by
 [CommerceGuys](http://commerceguys.com) and
