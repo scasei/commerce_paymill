@@ -47,20 +47,20 @@ function commerce_paymill_requirements($phase) {
 
   // Validating the cardonfile requirements.
   $requirements['commerce_paymill_cardonfile'] = array(
-    'title' => $t('Commerce Paymill'),
+    'title' => $t('Paymill: Card On File'),
   );
 
   if (!module_exists('commerce_cardonfile')) {
     $requirements['commerce_paymill_cardonfile'] += array(
       'severity' => REQUIREMENT_INFO,
-      'value' => $t('Not found'),
+      'value' => $t('Not available'),
       'description' => $t("You must install <a href='!cof_url'>Commerce Card on File 2.x</a> to use the Card on File functionality.", array('!cof_url' => COMMERCE_PAYMILL_CARDONFILE_URI)),
     );
   }
   elseif (!commerce_paymill_has_cardonfile()) {
     $requirements['commerce_paymill_cardonfile'] += array(
       'severity' => REQUIREMENT_WARNING,
-      'value' => $t('Outdated'),
+      'value' => $t('Version Incompatibility'),
       'description' => $t("Your version of <a href='!cof_url'>Commerce Card on File</a> is too old. Please upgrade to 2.x.", array('!cof_url' => COMMERCE_PAYMILL_CARDONFILE_URI)),
     );
   }
