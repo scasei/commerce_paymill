@@ -778,7 +778,7 @@ function commerce_paymill_libraries_info() {
     'version arguments' => array(
       'file' => 'lib/Services/Paymill/Apiclient/Curl.php',
       'pattern' => '@Paymill-php/([0-9\.]+)@',
-      'lines' => 48,
+      'lines' => 60,
     ),
     'files' => array(
       'php' => array(
