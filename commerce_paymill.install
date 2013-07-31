@@ -51,5 +51,31 @@ function commerce_paymill_requirements($phase) {
     );
   }
 
+  $requirements['commerce_payleap_cardonfile'] = array(
+    'title' => $t('Commerce Payleap'),
+  );
+
+  if (!module_exists('commerce_cardonfile')) {
+    $requirements['commerce_payleap_cardonfile'] += array(
+      'severity' => REQUIREMENT_INFO,
+      'value' => $t('Not found'),
+      'description' => $t("You must install <a href='!cof_url'>Commerce Card on File 2.x</a> to use the Card on File functionality.", array('!cof_url' => 'https://drupal.org/project/commerce_cardonfile')),
+    );
+  }
+  elseif (!commerce_payleap_has_cardonfile()) {
+    $requirements['commerce_payleap_cardonfile'] += array(
+      'severity' => REQUIREMENT_WARNING,
+      'value' => $t('Outdated'),
+      'description' => $t("Your version of <a href='!cof_url'>Commerce Card on File</a> is too old. Please upgrade to 2.x.", array('!cof_url' => 'https://drupal.org/project/commerce_cardonfile')),
+    );
+  }
+  else {
+    $requirements['commerce_payleap_cardonfile'] += array(
+      'severity' => REQUIREMENT_OK,
+      'value' => $t('Enabled'),
+      'description' => $t("The <a href='!cof_url'>Commerce Card on File</a> functionality is available.", array('!cof_url' => 'https://drupal.org/project/commerce_cardonfile')),
+    );
+  }
+
   return $requirements;
 }
