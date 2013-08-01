@@ -795,66 +795,72 @@ function commerce_paymill_set_proxy($settings) {
    *   The returned error string.
    */
 function commerce_paymill_get_error($error) {
-  $error_messages = array(
-    'internal_server_error' => array(
-      'watchdog' => 'Communication with Paymill failed',
-      'transaction' => 'There was an error with your payment.',
-      'message' => t('There was an error with your payment. Please try again or contact us for assistance.'),
-    ),
-    'invalid_public_key' => array(
-      'watchdog' => 'Invalid public key',
-      'transaction' => 'There was an error with your payment.',
-      'message' => t('There was an error with your payment. Please try again or contact us for assistance.'),
-    ),
-    'unknown_error' => array(
-      'watchdog' => 'Unknown error',
-      'transaction' => 'There was an error with your payment.',
-      'message' => t('There was an error with your payment. Please try again or contact us for assistance.'),
-    ),
-    '3ds_cancelled' => array(
-      'watchdog' => 'User cancelled 3D security password entry',
-      'transaction' => 'Transaction cancelled.',
-      'message' => t('Transaction cancelled.'),
-    ),
-    'field_invalid_card_number' => array(
-      'message' => t('Missing or invalid credit card number.'),
-    ),
-    'field_invalid_card_exp_year' => array(
-      'message' => t('Missing or invalid expiry year.'),
-    ),
-    'field_invalid_card_exp_month' > array(
-      'message' => t('Missing or invalid expiry month.'),
-    ),
-    'field_invalid_card_exp' => array(
-      'message' => t('Card has expired.'),
-    ),
-    'field_invalid_card_cvc' => array(
-      'message' => t('Missing or invalid checking number.'),
-    ),
-    'field_invalid_card_holder' => array(
-      'message' => t('Missing or invalid cardholder name.'),
-    ),
-    'field_invalid_account_number' => array(
-      'message' => t('Missing or invalid bank account number.'),
-    ),
-    'field_invalid_account_holder' => array(
-      'message' => t('Missing or invalid bank account holder.'),
-    ),
-    'field_invalid_bank_code' => array(
-      'message' => t('Missing or invalid zip code.'),
-    ),
-  );
 
-  if (isset($error_messages[$error])) {
-    return $error_messages[$error];
+  static $error_messages;
+
+  if (!isset($error_messages)) {
+    // Keyed array with all possible error messages.
+    $error_messages = array(
+      'internal_server_error' => array(
+        'watchdog' => 'Communication with Paymill failed',
+        'transaction' => 'There was an error with your payment.',
+        'message' => t('There was an error with your payment. Please try again or contact us for assistance.'),
+      ),
+      'invalid_public_key' => array(
+        'watchdog' => 'Invalid public key',
+        'transaction' => 'There was an error with your payment.',
+        'message' => t('There was an error with your payment. Please try again or contact us for assistance.'),
+      ),
+      'unknown_error' => array(
+        'watchdog' => 'Unknown error',
+        'transaction' => 'There was an error with your payment.',
+        'message' => t('There was an error with your payment. Please try again or contact us for assistance.'),
+      ),
+      '3ds_cancelled' => array(
+        'watchdog' => 'User cancelled 3D security password entry',
+        'transaction' => 'Transaction cancelled.',
+        'message' => t('Transaction cancelled.'),
+      ),
+      'field_invalid_card_number' => array(
+        'message' => t('Missing or invalid credit card number.'),
+      ),
+      'field_invalid_card_exp_year' => array(
+        'message' => t('Missing or invalid expiry year.'),
+      ),
+      'field_invalid_card_exp_month' > array(
+        'message' => t('Missing or invalid expiry month.'),
+      ),
+      'field_invalid_card_exp' => array(
+        'message' => t('Card has expired.'),
+      ),
+      'field_invalid_card_cvc' => array(
+        'message' => t('Missing or invalid checking number.'),
+      ),
+      'field_invalid_card_holder' => array(
+        'message' => t('Missing or invalid cardholder name.'),
+      ),
+      'field_invalid_account_number' => array(
+        'message' => t('Missing or invalid bank account number.'),
+      ),
+      'field_invalid_account_holder' => array(
+        'message' => t('Missing or invalid bank account holder.'),
+      ),
+      'field_invalid_bank_code' => array(
+        'message' => t('Missing or invalid zip code.'),
+      ),
+    );
   }
-  else {
-    return array(
+
+  // Return one of the defined error messages or a generic error in case it's
+  // not contemplated by the above defined messages.
+  return isset($error_messages[$error]) ?
+    $error_messages[$error]
+    :
+    array(
       'watchdog' => drupal_ucfirst(check_plain(str_replace('_', ' ', $error))),
       'transaction' => 'There was an error with your payment.',
       'message' => t('There was an error with your payment. Please try again or contact us for assistance.'),
     );
-  }
 }
 
 /**
