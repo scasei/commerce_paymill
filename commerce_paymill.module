@@ -906,17 +906,21 @@ function commerce_paymill_libraries_info() {
  * @param object $payment_method
  *  The payment method instance definition array.
  * @param object $card_data
- *   The stored credit card data array to be processed
+ *   The stored credit card data array to be processed.
  * @param object $order
- *   The order object that is being processed
+ *   The order object that is being processed.
  * @param array $charge
  *   The price array for the charge amount with keys of 'amount' and 'currency'
  *   If null the total value of the order is used.
  *
- * @return
- *   FALSE if the transaction was not successful
+ * @return boolean
+ *   FALSE if the transaction was not successful, TRUE otherwise.
  */
-function commerce_paymill_cardonfile_charge($payment_method, $card_data, $order, $charge = NULL) {
+function commerce_paymill_cardonfile_charge($payment_method,
+                                            $card_data,
+                                            $order,
+                                            $charge = NULL) {
+
   // Format order total for transaction.
   if (!isset($charge)) {
     $wrapper = entity_metadata_wrapper('commerce_order', $order);
@@ -932,22 +936,22 @@ function commerce_paymill_cardonfile_charge($payment_method, $card_data, $order,
  * @param object $payment_method
  *  The payment method instance definition array.
  * @param string $payment_id
- *   The payment ID of the card to be processed
+ *   The payment ID of the card to be processed.
  * @param object $order
- *   The order object that is being processed
+ *   The order object that is being processed.
  * @param array $charge
  *   The price array for the charge amount with keys of 'amount' and 'currency'
  *   If null the total value of the order is used.
  *
- * @return
- *   FALSE if the transaction was not successful
+ * @return boolean
+ *   FALSE if the transaction was not successful, TRUE otherwise.
  */
 function commerce_paymill_process_transaction($payment_method, $payment_id, $order, $charge = NULL) {
 
   // Include Paymill libraries.
   libraries_load('paymill');
 
-  // Get current API key.
+  // Get the API key.
   $api_key = commerce_paymill_get_key($payment_method['settings']);
 
   // Get client ID.
