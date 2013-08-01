@@ -965,28 +965,24 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     $charge = commerce_payment_order_balance($order);
   }
 
-  // Create transaction/preauth
+  // Create transaction basic data.
   $transaction_params = array(
     'amount' => $charge['amount'],
     'currency' => $charge['currency_code'],
     'payment' => $payment_id,
+    'description' => sprintf('Order: %s', $order->order_id) ,
   );
 
   $original_response = array();
-  if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
-    $preauthorization_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER);
-    $response = $preauthorization_service->create($transaction_params);
-    if (method_exists($preauthorization_service, 'getResponse')) {
-      $original_response = $preauthorization_service->getResponse();
-    }
-  }
-  else {
-    $transaction_service = new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
-    $transaction_params['description'] = 'Order:' . $order->order_id;
-    $response = $transaction_service->create($transaction_params);
-    if (method_exists($transaction_service, 'getResponse')) {
-      $original_response = $transaction_service->getResponse();
-    }
+  // Do the request for pre authorization or simple capture.
+  $payment_service = $payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY ?
+    new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER)
+    :
+    new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
+
+  $response = $payment_service->create($transaction_params);
+  if (method_exists($payment_service, 'getResponse')) {
+    $original_response = $payment_service->getResponse();
   }
 
   if (!isset($response['response_code']) && isset($original_response['body']['data']['response_code'])) {
