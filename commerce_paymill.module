@@ -1018,6 +1018,11 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     'description' => sprintf('Order: %s', $order->order_id) ,
   );
 
+  // Verify if there's a configured proxy. If it is setup the cURL options for it.
+  if (!empty($payment_method['settings']['proxy_settings']['proxy_host'])) {
+    commerce_paymill_set_proxy($payment_method['settings']['proxy_settings']);
+  }
+
   $original_response = array();
   // Do the request for pre authorization or simple capture.
   $payment_service = $payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY ?
