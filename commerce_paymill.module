@@ -48,6 +48,15 @@ function commerce_paymill_default_settings() {
     'mode' => COMMERCE_PAYMILL_MODE_TEST,
     'capture_mode' => COMMERCE_CREDIT_AUTH_CAPTURE,
     'cardonfile' => FALSE,
+    'proxy_settings' => array(
+      'proxy_type' => 0,
+      'proxy_host' => 'localhost',
+      'proxy_port' => 8080,
+      'proxy_user' => '',
+      'proxy_pass' => '',
+      'proxy_auth' => 0,
+      'proxy_tunnel' => TRUE,
+    )
   );
 }
 
@@ -169,7 +178,7 @@ function commerce_paymill_settings_form($settings = NULL) {
   }
 
   // Add proxy settings to the form.
-  _commerce_paymill_proxy_settings_form($form);
+  _commerce_paymill_proxy_settings_form($form, $settings);
 
   return $form;
 }
@@ -179,17 +188,21 @@ function commerce_paymill_settings_form($settings = NULL) {
  *
  * @param array $form
  *   The form to be populated with the proxy data fields.
+ * @param array $settings
+ *   The current form settings.
  * @return nothing
  *   Side effects only.
  */
-function _commerce_paymill_proxy_settings_form(&$form) {
+function _commerce_paymill_proxy_settings_form(&$form, $settings) {
+
+  $current_settings = &$settings['proxy_settings'];
 
   // Proxy settings for the API client.
   $form['proxy_settings'] = array(
     '#type' => 'fieldset',
     '#title' => t('Proxy settings'),
     '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
+    '#collapsed' => FALSE,
   );
 
   // Proxy type: HTTP is the default.
@@ -200,7 +213,7 @@ function _commerce_paymill_proxy_settings_form(&$form) {
       t('HTTP'),
       t('SOCKS5'),),
     '#description' => t('Indicate the type of proxy'),
-    '#default_value' => 0,
+    '#default_value' => $current_settings['proxy_type'],
   );
 
   // Proxy host (or IP address to circumvent name resolution).
@@ -208,13 +221,14 @@ function _commerce_paymill_proxy_settings_form(&$form) {
     '#type' => 'textfield',
     '#title' => t('The proxy host - hostname or IP'),
     '#description' => t('The host of the proxy'),
+    '#default_value' => $current_settings['proxy_host'],
   );
 
   $form['proxy_settings']['proxy_port'] = array(
     '#type' => 'textfield',
     '#title' => t('Proxy port'),
     '#description' => t('The proxy port'),
-    '#default_value' => 8080,
+    '#default_value' => $current_settings['proxy_port'],
     '#element_validate' => array('element_validate_number'),
     '#size' => 5,
   );
@@ -224,7 +238,7 @@ function _commerce_paymill_proxy_settings_form(&$form) {
     '#type' => 'textfield',
     '#title' => t('Proxy user'),
     '#description' => t('The user for proxy authentication'),
-    '#default_value' => '',
+    '#default_value' => $current_settings['proxy_user'],
     '#maxlength' => 40,
     '#size' => 40,
     '#required' => FALSE,
@@ -235,7 +249,7 @@ function _commerce_paymill_proxy_settings_form(&$form) {
     '#type' => 'textfield',
     '#title' => t('Proxy password'),
     '#description' => t('The password for proxy authentication'),
-    '#default_value' => '',
+    '#default_value' => $current_settings['proxy_pass'],
     '#size' => 40,
   );
 
@@ -243,10 +257,10 @@ function _commerce_paymill_proxy_settings_form(&$form) {
     '#type' => 'radios',
     '#title' => t('<form element title>'),
     '#options' => array(
-      t('NTLM'),
-      t('Basic Auth'),),
+      t('Basic Auth'),
+      t('NTLM'),),
     '#description' => t('Which authentication method the proxy uses'),
-    '#default_value' => 0,
+    '#default_value' => $current_settings['proxy_auth'],
   );
 
   // If the proxy connection should be tunneled (HTTP CONNECT method).
@@ -254,7 +268,7 @@ function _commerce_paymill_proxy_settings_form(&$form) {
     '#type' => 'checkbox',
     '#title' => t('Proxy tunnel'),
     '#description' => t('Check if the connection should be tunneled (CONNECT)'),
-    '#default_value' => FALSE,
+    '#default_value' => $current_settings['proxy_tunnel'],
   );
 
 } // _commerce_paymill_proxy_settings_form
@@ -432,8 +446,6 @@ function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_p
     ),
   );
 
-  dd($payment_method['settings'], 'st');
-
   // Load Paymill bridge.
   $key = commerce_paymill_get_key($payment_method['settings'], 'public');
   $settings = array('publicKey' => $key);
@@ -590,6 +602,9 @@ function commerce_paymill_submit_form_validate($payment_method,
  */
 function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge) {
 
+  // Extra Paymill client options.
+  $extra_options = array();
+
   $order->data['commerce_paymill'] = $pane_values;
 
   // Include Paymill libraries.
@@ -627,7 +642,12 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
       'client' => $client_id,
     );
 
-    $payment_service = new Services_Paymill_Payments($api_key, COMMERCE_PAYMILL_SERVER);
+    // Verify if there's a configured proxy. If it is setup the cURL options for it.
+    if (!empty($payment_method['settings']['proxy_settings']['proxy_host'])) {
+      $extra_options = commerce_paymill_set_proxy($payment_method['settings']['proxy_settings']);
+    }
+
+    $payment_service = new Services_Paymill_Payments($api_key, COMMERCE_PAYMILL_SERVER, $extra_options);
     $payment = $payment_service->create($payment_params);
 
     if (isset($payment['error'])) {
@@ -685,6 +705,9 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
 function commerce_paymill_get_client_id($order, $settings) {
   global $user;
 
+  // Extra Paymill client options.
+  $extra_options = array();
+
   $mode = $settings['mode'];
 
   // Does the current user already have a client instance?
@@ -694,9 +717,14 @@ function commerce_paymill_get_client_id($order, $settings) {
     }
   }
 
+  // Verify if there's a configured proxy. If it is setup the cURL options for it.
+  if (!empty($payment_method['settings']['proxy_settings']['proxy_host'])) {
+    $extra_options = commerce_paymill_set_proxy($payment_method['settings']['proxy_settings']);
+  }
+
   // Instantiate client service.
   $api_key = commerce_paymill_get_key($settings);
-  $client_service = new Services_Paymill_Clients($api_key, COMMERCE_PAYMILL_SERVER);
+  $client_service = new Services_Paymill_Clients($api_key, COMMERCE_PAYMILL_SERVER, $extra_options);
 
   // Create client.
   $client_params = array(
@@ -993,6 +1021,9 @@ function commerce_paymill_cardonfile_charge($payment_method,
  */
 function commerce_paymill_process_transaction($payment_method, $payment_id, $order, $charge = NULL) {
 
+  // Extra Paymill client options.
+  $extra_options = array();
+
   // Include Paymill libraries.
   libraries_load('paymill');
 
@@ -1020,15 +1051,15 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
 
   // Verify if there's a configured proxy. If it is setup the cURL options for it.
   if (!empty($payment_method['settings']['proxy_settings']['proxy_host'])) {
-    commerce_paymill_set_proxy($payment_method['settings']['proxy_settings']);
+    $extra_options = commerce_paymill_set_proxy($payment_method['settings']['proxy_settings']);
   }
 
   $original_response = array();
-  // Do the request for pre authorization or simple capture.
+  // Do the request for pre authorization or single capture.
   $payment_service = $payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY ?
-    new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER)
+    new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER, $extra_options)
     :
-    new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER);
+    new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER, $extra_options);
 
   $response = $payment_service->create($transaction_params);
   if (method_exists($payment_service, 'getResponse')) {
@@ -1039,10 +1070,6 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     $response = $original_response['body']['data'];
   }
 
-  /**
-   * @TODO Transaction creation can be abstracted. Avoid code duplication.
-   *
-   */
   // Create Commerce transaction.
   $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
   $transaction->instance_id = $payment_method['instance_id'];
