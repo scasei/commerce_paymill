@@ -50,7 +50,7 @@ function commerce_paymill_default_settings() {
     'cardonfile' => FALSE,
     'proxy_settings' => array(
       'proxy_type' => 0,
-      'proxy_host' => 'localhost',
+      'proxy_host' => '',
       'proxy_port' => 8080,
       'proxy_user' => '',
       'proxy_pass' => '',
