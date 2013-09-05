@@ -937,6 +937,54 @@ function commerce_paymill_get_status_message($status_code) {
 }
 
 /**
+ * Translates a status code to a standardized Commerce Card on File failure.
+ */
+function commerce_paymill_translate_status_code_to_cardonfile_failure($status_code) {
+  switch ($status_code) {
+    case 10001: // General undefined response.
+    case 10002: // Still waiting on something.
+      return COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE_GATEWAY_ERROR;
+    case 40000: // General problem with data.
+    case 40301: // Currency/amount mismatch.
+    case 40400: // Problem with input data.
+    case 40401: // Amount too low or zero.
+    case 40402: // Usage field too long.
+      return COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE_GENERIC_DECLINE;
+    case 40100: // Problem with credit card data.
+    case 40101: // Problem with cvv.
+    case 40403: // Currency not allowed.
+    case 40104: // Card invalid.
+    case 40105: // Expiry date not valid.
+      return COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE_HARD_DECLINE;
+    case 40102: // Card expired or not yet valid.
+      return COMMERCE_COF_PROCESS_CODE_CARD_EXPIRED;
+    case 40103: // Limit exceeded.
+      return COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE_LIMIT_EXCEEDED;
+    case 40200: // Problem with bank account data.
+    case 40300: // Problem with 3d secure data.
+    case 50102: // Card declined by authorization system.
+    case 50103: // Manipulation or stolen card.
+    case 50104: // Card restricted.
+    case 50201: // Card blacklisted.
+    case 50400: // Decline because of risk issues.
+      return COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE_CALL_ISSUER;
+    case 50000: // General problem with backend.
+      return COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE_GATEWAY_UNAVAILABLE;
+    case 50001: // Country blacklisted.
+    case 50100: // Technical error with credit card.
+    case 50101: // Error limit exceeded.
+    case 50105: // Invalid card configuration data.
+    case 50200: // Technical error with bank account.
+    case 50300: // Technical error with 3D secure.
+      return COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE_GATEWAY_CONFIGURATION_ERROR;
+
+    default:
+      return COMMERCE_COF_PROCESS_CODE_METHOD_FAILURE_GENERIC_DECLINE;
+  }
+  return NULL;
+}
+
+/**
  * Implements hook_libraries_info().
  */
 function commerce_paymill_libraries_info() {
@@ -1080,7 +1128,13 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
   if ($response['response_code'] < 20000 || $response['response_code'] >= 30000) {
     $message = commerce_paymill_get_status_message($response['response_code']);
     $message = isset($message) ? $message : check_plain($response['error']);
-    $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
+    if (module_exists('commerce_cardonfile')) {
+      // Provide a more granular failure status if Card on File is enabled.
+      $transaction->status = commerce_paymill_translate_status_code_to_cardonfile_failure($response['response_code']);
+    }
+    else {
+      $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
+    }
     $transaction->message = $message;
 
     // Error handling.
