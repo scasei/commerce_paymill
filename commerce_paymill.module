@@ -26,6 +26,7 @@ function commerce_paymill_commerce_payment_method_info() {
     'terminal' => FALSE,
     'cardonfile' => array(
       'charge callback' => 'commerce_paymill_cardonfile_charge',
+      'create form callback' => 'commerce_paymill_cardonfile_create_form',
     ),
   );
 
@@ -359,8 +360,19 @@ function commerce_paymill_permission() {
  *
  * If there is no order provided, it means we only want the credit card to be
  * stored without doing an actual payment transaction.
+ *
+ * @param $payment_method_instance
+ *   Payment method instance.
+ * @param $order
+ *   (optional) Commerce order. If it's omitted, it means we only want the
+ *   credit card to be stored without doing an actual payment transaction.
+ * @param $charge
+ *   (optional) Array that defines the amount that we are going to use to create
+ *   the payment token. It's required when order is not provided.
+ *
+ * @return Form array.
  */
-function commerce_paymill_credit_card_form_build($order = NULL, $payment_method_instance = NULL) {
+function commerce_paymill_credit_card_form_build($payment_method_instance, $order = NULL, $charge = NULL) {
   // If Paymill library isn't loaded.
   libraries_load('paymill');
   if (!interface_exists('Services_Paymill_Apiclient_Interface')) {
@@ -401,12 +413,6 @@ function commerce_paymill_credit_card_form_build($order = NULL, $payment_method_
     '#markup' => $markup,
   );
 
-  $charge = array(
-    // Normally, amount can't be zero with Paymill, but in this case we are not
-    // going to process the transaction, so it's fine.
-    'amount' => 0,
-    'currency_code' => 'EUR'
-  );
   // Get order balance if order is provided.
   if (!empty($order)) {
     $charge = commerce_payment_order_balance($order);
@@ -456,10 +462,6 @@ function commerce_paymill_credit_card_form_build($order = NULL, $payment_method_
     ),
   );
 
-  if (empty($payment_method_instance)) {
-    // @todo Make configurable which payment method instance should be used.
-    $payment_method_instance = commerce_payment_method_instance_load('commerce_paymill|commerce_payment_commerce_paymill');
-  }
   // Load Paymill bridge.
   $key = commerce_paymill_get_key($payment_method_instance['settings'], 'public');
   $settings = array('publicKey' => $key);
@@ -485,7 +487,7 @@ function commerce_paymill_credit_card_form_build($order = NULL, $payment_method_
  * provided. When the order is not provided we just want the card to be stored
  * anyway, so no transaction is needed.
  */
-function commerce_paymill_credit_card_validate($payment_method_instance, $submitted_values, $order = NULL, $form_parents = array()) {
+function commerce_paymill_credit_card_validate($submitted_values, $payment_method_instance, $order = NULL, $form_parents = array()) {
   $name = implode('][', $form_parents) . ']';
   $cardonfile_capable = commerce_paymill_has_cardonfile(!empty($payment_method_instance['settings']['cardonfile']));
 
@@ -536,6 +538,7 @@ function commerce_paymill_credit_card_validate($payment_method_instance, $submit
     form_set_error($name, t('We encountered an error processing your payment. Your card has not been charged. Please enable JavaScript to complete your payment or contact us for assistance.'));
     return FALSE;
   }
+  return TRUE;
 }
 
 /**
@@ -554,10 +557,7 @@ function commerce_paymill_credit_card_validate($payment_method_instance, $submit
  *   (optional) Required in case the order is not provided. User ID of the
  *   Drupal user whose credit card we are dealing with.
  *
- * @return array
- *   Array containing the payment ID (under the key of `payment_id`) and the
- *   card on file entity (under the key of `card_data`) if Commerce Card on File
- *   is enabled and the card is designated to be stored.
+ * @return Array containing the payment ID and card information.
  */
 function commerce_paymill_payment_initialize($submitted_values, $payment_method_instance, $order = NULL, $client_mail = NULL, $client_uid = NULL) {
   // Extra Paymill client options.
@@ -615,7 +615,7 @@ function commerce_paymill_payment_initialize($submitted_values, $payment_method_
     $payment = $payment_service->create($payment_params);
 
     if (isset($payment['error'])) {
-      commerce_paymill_error_message();
+      commerce_paymill_error_message('error', empty($order));
       commerce_paymill_error_handler('payment', !empty($order) ? $order->order_id : NULL, '', check_plain($payment['error']));
       return FALSE;
     }
@@ -636,18 +636,15 @@ function commerce_paymill_payment_initialize($submitted_values, $payment_method_
         'card_exp_year' => $payment['expire_year'],
         'status' => 1,
       );
-      commerce_cardonfile_save($card_data);
     }
-  }
-
-  // Set it to default if checked.
-  if ($cardonfile_capable && !empty($card_data) && $cardonfile_instance_default) {
-    commerce_cardonfile_set_default_card($card_data->card_id);
   }
 
   return array(
     'payment_id' => $payment_id,
-    'card_data' => !empty($card_data) ? $card_data : NULL,
+    'card' => array(
+      'card_data' => !empty($card_data) ? $card_data : NULL,
+      'card_default' => $cardonfile_capable && !empty($card_data) && $cardonfile_instance_default
+    )
   );
 }
 
@@ -655,7 +652,7 @@ function commerce_paymill_payment_initialize($submitted_values, $payment_method_
  * Payment method callback: submit form.
  */
 function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_pane, $order) {
-  return commerce_paymill_credit_card_form_build($order, $payment_method);
+  return commerce_paymill_credit_card_form_build($payment_method, $order);
 }
 
 /**
@@ -714,18 +711,26 @@ function commerce_paymill_error_handler($type, $order_id, $error_code, $error_me
  * @return nothing
  *   Side effects only.
  */
-function commerce_paymill_error_message($level = 'error') {
-  drupal_set_message(
-    t('There was an error with your payment. Please try again or contact us for assistance.'),
-    'error'
-  );
+function commerce_paymill_error_message($level = 'error', $preauth = FALSE) {
+  if (!$preauth) {
+    drupal_set_message(
+      t('There was an error with your payment. Please try again or contact us for assistance.'),
+      'error'
+    );
+  }
+  else {
+    drupal_set_message(
+      t('There was an error while validating your card. Please try again or contact us for assistance.'),
+      'error'
+    );
+  }
 } // commerce_paymill_error_message
 
 /**
  * Payment method callback: submit form validation.
  */
 function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pane_values, $order, $form_parents = array()) {
-  return commerce_paymill_credit_card_validate($payment_method, $pane_values, $order, array('commerce_payment', 'payment_details'));
+  return commerce_paymill_credit_card_validate($pane_values, $payment_method, $order, array('commerce_payment', 'payment_details'));
 }
 
 /**
@@ -735,12 +740,11 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
   $payment_initialized = commerce_paymill_payment_initialize($pane_values, $payment_method, $order);
   // Process the payment through Card On File.
   if (!empty($payment_initialized['card_data'])) {
-    return commerce_paymill_cardonfile_charge($payment_method, $payment_initialized['card_data'], $order, $charge);
+    return commerce_paymill_cardonfile_charge($payment_method, $payment_initialized['payment_id'], $payment_initialized['card'], $order);
   }
 
   // Handle the payment in a one off manner, i.e., no Card On File.
-  return commerce_paymill_process_transaction($payment_method, $payment_initialized['payment_id'], $order, $charge);
-  return TRUE;
+  return commerce_paymill_process_transaction($payment_method, $payment_initialized['payment_id'], $payment_initialized['card'], $order);
 }
 
 /**
@@ -1068,50 +1072,129 @@ function commerce_paymill_libraries_info() {
 /**
  * Card on file callback: background charge payment.
  *
- * @param object $payment_method
+ * @param object $payment_method_instance
  *  The payment method instance definition array.
- * @param object $card_data
- *   The stored credit card data array to be processed.
- * @param object $order
+ * @param $payment_id
+ *   Paymill payment object.
+ * @param $card
+ *   Array containing the Card on File entity (under key `card_data`) and a
+ *   boolean (under key `card_default`) that indicates if the card has to be set
+ *   as default.
+ * @param $order
  *   The order object that is being processed.
  * @param array $charge
  *   The price array for the charge amount with keys of 'amount' and 'currency'
  *   If null the total value of the order is used.
  *
- * @return boolean
+ * @return
  *   FALSE if the transaction was not successful, TRUE otherwise.
  */
-function commerce_paymill_cardonfile_charge($payment_method,
-                                            $card_data,
-                                            $order,
-                                            $charge = NULL) {
-
+function commerce_paymill_cardonfile_charge($payment_method_instance, $payment_id, $card, $order, $charge = NULL) {
   // Format order total for the transaction.
   if (!isset($charge)) {
     $wrapper = entity_metadata_wrapper('commerce_order', $order);
     $charge = commerce_line_items_total($wrapper->commerce_line_items);
   }
 
-  return commerce_paymill_process_transaction($payment_method, $card_data->remote_id, $order, $charge);
+  return commerce_paymill_process_transaction($payment_method_instance, $payment_id, $card, $order, $charge);
+}
+
+/**
+ * Card on File callback: create credit card form.
+ */
+function commerce_paymill_cardonfile_create_form($form, &$form_state, $op, $card_data) {
+  $payment_method_instance = commerce_payment_method_instance_load('commerce_paymill|commerce_payment_commerce_paymill');
+  // @todo 7.x-2.x-cardonfile-create — Figure out the amount.
+  $charge = array(
+    'amount' => '100',
+    'currency_code' => 'EUR',
+  );
+  $form += commerce_paymill_credit_card_form_build($payment_method_instance, NULL, $charge);
+  $form['cardonfile'] = array(
+    '#type' => 'value',
+    '#value' => 'new',
+  );
+  $form['cardonfile_instance_default'] = array(
+    '#type' => 'value',
+    '#value' => 1,
+  );
+  $form['credit_card']['cardonfile_store'] = array(
+    '#type' => 'value',
+    '#value' => 1,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Add card'),
+  );
+  return $form;
+}
+
+/**
+ * Form validate handler: create credit card form.
+ */
+function commerce_paymill_cardonfile_create_form_validate($form, &$form_state) {
+  // @todo 7.x-2.x-cardonfile-create — Do not use the current user, it's a bug.
+  global $user;
+  // @todo 7.x-2.x-cardonfile-create — Do not hardcore payment method instance.
+  $payment_method_instance = commerce_payment_method_instance_load('commerce_paymill|commerce_payment_commerce_paymill');
+  if (!commerce_paymill_credit_card_validate($form_state['values'], $payment_method_instance, NULL)) {
+    form_set_error('credit_card');
+    return;
+  }
+  $payment_initialized = commerce_paymill_payment_initialize($form_state['values'], $payment_method_instance, NULL, $user->mail, $user->uid);
+  if (empty($payment_initialized)) {
+    form_set_error('credit_card');
+    return;
+  }
+
+  // @todo 7.x-2.x-cardonfile-create — Figure out the amount.
+  $charge = array(
+    'amount' => '100',
+    'currency_code' => 'EUR',
+  );
+  if (!commerce_paymill_process_transaction($payment_method_instance, $payment_initialized['payment_id'], $payment_initialized['card'], NULL, $user->mail, $user->uid, $charge)) {
+    form_set_error('credit_card');
+    return;
+  }
+}
+
+/**
+ * Form submit handler: create credit card form.
+ */
+function commerce_paymill_cardonfile_create_form_submit($form, &$form_state) {
+  // @todo 7.x-2.x-cardonfile-create — Do not use the current user, it's a bug.
+  global $user;
+  $form_state['redirect'] = 'user/' . $GLOBALS['user']->uid . '/cards';
 }
 
 /**
  * Paymill payment transaction.
  *
- * @param object $payment_method
+ * @param object $payment_method_instance
  *  The payment method instance definition array.
- * @param string $payment_id
- *   The payment ID of the card to be processed.
+ * @param $payment_id
+ *   Paymill payment ID.
+ * @param array $card
+ *   (optional) Array containing the Card on File entity (under key `card_data`)
+ *   and a boolean (under key `card_default`) that indicates if the card has to
+ *   be set as default.
  * @param object $order
- *   The order object that is being processed.
+ *   (optional) The order object that is being processed.
+ * @param $client_mail
+ *   (optional) Required in case the order is not provided. Email address of
+ *   the Drupal user whose credit card we are dealing with.
+ * @param $client_uid
+ *   (optional) Required in case the order is not provided. User ID of the
+ *   Drupal user whose credit card we are dealing with.
  * @param array $charge
- *   The price array for the charge amount with keys of 'amount' and 'currency'
- *   If null the total value of the order is used.
+ *   (optional) Required in case the order is not provided. The price array for
+ *   the charge amount with keys of 'amount' and 'currency'.
  *
+ * @internal param string $payment Paymill payment object.*   Paymill payment object.
  * @return boolean
  *   FALSE if the transaction was not successful, TRUE otherwise.
  */
-function commerce_paymill_process_transaction($payment_method, $payment_id, $order, $charge = NULL) {
+function commerce_paymill_process_transaction($payment_method_instance, $payment_id, $card = NULL, $order = NULL, $client_mail = NULL, $client_uid = NULL, $charge = NULL) {
 
   // Extra Paymill client options.
   $extra_options = array();
@@ -1120,38 +1203,58 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
   libraries_load('paymill');
 
   // Get the API key.
-  $api_key = commerce_paymill_get_key($payment_method['settings']);
+  $api_key = commerce_paymill_get_key($payment_method_instance['settings']);
 
   // Get client ID.
-  $client_id = commerce_paymill_get_client_id($order->mail, $order->uid, $payment_method['settings']);
+  if (!empty($order)) {
+    $client_mail = $order->mail;
+    $client_uid = $order->uid;
+  }
+  $client_id = commerce_paymill_get_client_id($client_mail, $client_uid, $payment_method_instance['settings']);
   if (!$client_id) {
-    commerce_paymill_error_message();
+    commerce_paymill_error_message('error', empty($order));
     return FALSE;
+  }
+
+  // Verify if there's a configured proxy. If it is setup the cURL options for it.
+  if (!empty($payment_method_instance['settings']['proxy_settings']['proxy_host'])) {
+    $extra_options = commerce_paymill_set_proxy($payment_method_instance['settings']['proxy_settings']);
+  }
+
+  $original_response = array();
+  if (empty($order) || $payment_method_instance['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
+    // Do only a preauthorization if there is no order provided, which most
+    // likely means that we only want to store a credit card.
+    // Also do preauthorization only if the payment method instance is
+    // configured that way.
+    $payment_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER, $extra_options);
+    $transaction_description = 'Preauthorization';
+    if (!empty($order)) {
+      $transaction_description .= sprintf(' for order %s', $order->order_id);
+    }
+    $transaction_description .= '.';
+  }
+  else {
+    // Do a single capture when there is an order provided and the payment
+    // method instance is not configured to do preauthorization only.
+    $payment_service = new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER, $extra_options);
+    if (!empty($order)) {
+      $transaction_description = sprintf('Captured order %s.', $order->order_id);
+    }
   }
 
   if (empty($charge)) {
     $charge = commerce_payment_order_balance($order);
   }
 
+  $amount = commerce_currency_amount_to_decimal($charge['amount'], $charge['currency_code']);
   // Create transaction basic data.
   $transaction_params = array(
     'amount' => $charge['amount'],
     'currency' => $charge['currency_code'],
     'payment' => $payment_id,
-    'description' => sprintf('Order: %s', $order->order_id) ,
+    'description' => $transaction_description,
   );
-
-  // Verify if there's a configured proxy. If it is setup the cURL options for it.
-  if (!empty($payment_method['settings']['proxy_settings']['proxy_host'])) {
-    $extra_options = commerce_paymill_set_proxy($payment_method['settings']['proxy_settings']);
-  }
-
-  $original_response = array();
-  // Do the request for pre authorization or single capture.
-  $payment_service = $payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY ?
-    new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER, $extra_options)
-    :
-    new Services_Paymill_Transactions($api_key, COMMERCE_PAYMILL_SERVER, $extra_options);
 
   $response = $payment_service->create($transaction_params);
   if (method_exists($payment_service, 'getResponse')) {
@@ -1162,41 +1265,57 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
     $response = $original_response['body']['data'];
   }
 
-  // Create Commerce transaction.
-  $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
-  $transaction->instance_id = $payment_method['instance_id'];
-  $transaction->amount = $charge['amount'];
-  $transaction->currency_code = $charge['currency_code'];
+  // Create a Commerce transaction if the order is provided.
+  if (!empty($order)) {
+    $transaction = commerce_payment_transaction_new('commerce_paymill', $order->order_id);
+    $transaction->instance_id = $payment_method_instance['instance_id'];
+    $transaction->amount = $charge['amount'];
+    $transaction->currency_code = $charge['currency_code'];
+  }
 
-  // Set transaction status.
+  // Log possible errors, set status, amount and message in the transaction, if
+  // we have created one. Save a transaction then return, we have nothing else
+  // to do here.
   if ($response['response_code'] < 20000 || $response['response_code'] >= 30000) {
     $message = commerce_paymill_get_status_message($response['response_code']);
     $message = isset($message) ? $message : check_plain($response['error']);
-    if (module_exists('commerce_cardonfile')) {
-      // Provide a more granular failure status if Card on File is enabled.
-      $transaction->status = commerce_paymill_translate_status_code_to_cardonfile_failure($response['response_code']);
-    }
-    else {
-      $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
-    }
-    $transaction->message = $message;
-
-    // Error handling.
     if ($response['response_code']) {
-      commerce_paymill_error_handler('transaction', $order->order_id, $response['response_code'], $message);
+      commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, $response['response_code'], $message);
     }
     else {
-      commerce_paymill_error_handler('transaction', $order->order_id, '', $message);
+      commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, '', $message);
     }
-    commerce_paymill_error_message();
+    commerce_paymill_error_message('error', empty($order));
 
-    // Save transaction.
-    commerce_payment_transaction_save($transaction);
+    if (!empty($order)) {
+      $transaction->amount = 0;
+      if (module_exists('commerce_cardonfile')) {
+        // Provide a more granular failure status if Card on File is enabled.
+        $transaction->status = commerce_paymill_translate_status_code_to_cardonfile_failure($response['response_code']);
+      }
+      else {
+        $transaction->status = COMMERCE_PAYMENT_STATUS_FAILURE;
+      }
+      $transaction->message = $message;
+
+      // Save transaction.
+      commerce_payment_transaction_save($transaction);
+    }
     return FALSE;
-
   }
-  else {
-    if ($payment_method['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
+
+  // If card data is provided, save it.
+  if (!empty($card)) {
+    commerce_cardonfile_save($card['card_data']);
+    if ($card['card_default']) {
+      commerce_cardonfile_set_default_card($card['card_data']->card_id);
+    }
+  }
+
+  // Again, if we have an order, store the payment ID in the created Commerce
+  // transaction and also set a status for the transaction.
+  if (!empty($order)) {
+    if ($payment_method_instance['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
       $transaction->status = COMMERCE_PAYMENT_STATUS_PENDING;
       $transaction->remote_id = $response['preauthorization']['id'];
       $transaction->remote_status = 'pending';
@@ -1205,18 +1324,18 @@ function commerce_paymill_process_transaction($payment_method, $payment_id, $ord
       $transaction->status = COMMERCE_PAYMENT_STATUS_SUCCESS;
       $transaction->remote_id = $response['id'];
     }
+    // Save transaction.
+    commerce_payment_transaction_save($transaction);
   }
 
-  // Save transaction.
-  commerce_payment_transaction_save($transaction);
 
   // Check for errors from the response.
   if (isset($response['error'])) {
-    commerce_paymill_error_handler('transaction', $order->order_id, '', $response['error']);
+    commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, '', $response['error']);
     commerce_paymill_error_message();
-
     return FALSE;
   }
+  return TRUE;
 }
 
 /**
