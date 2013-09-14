@@ -26,6 +26,14 @@ function commerce_paymill_commerce_payment_method_info() {
     'terminal' => FALSE,
     'cardonfile' => array(
       'charge callback' => 'commerce_paymill_cardonfile_charge',
+      // Create callback is invoked inside of the default credit card creation
+      // form submit handler in Commerce Card on File. Since Commerce Paymill
+      // defines its own credit card creation form, this callback will never be
+      // used, but Card on File strongly relies on its existance when it
+      // discovers the payment methods that implements credit card creation.
+      // This most likely should be fixed in Card on File, but let's keep this
+      // here for now.
+      'create callback' => 'commerce_paymill_cardonfile_create_form',
       'create form callback' => 'commerce_paymill_cardonfile_create_form',
     ),
   );
@@ -641,10 +649,8 @@ function commerce_paymill_payment_initialize($submitted_values, $payment_method_
 
   return array(
     'payment_id' => $payment_id,
-    'card' => array(
-      'card_data' => !empty($card_data) ? $card_data : NULL,
-      'card_default' => $cardonfile_capable && !empty($card_data) && $cardonfile_instance_default
-    )
+    'card_data' => !empty($card_data) ? $card_data : NULL,
+    'card_default' => $cardonfile_capable && !empty($card_data) && $cardonfile_instance_default,
   );
 }
 
@@ -737,14 +743,18 @@ function commerce_paymill_submit_form_validate($payment_method, $pane_form, $pan
  * Payment method callback: submit form submission.
  */
 function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_values, $order, $charge) {
-  $payment_initialized = commerce_paymill_payment_initialize($pane_values, $payment_method, $order);
   // Process the payment through Card On File.
-  if (!empty($payment_initialized['card_data'])) {
-    return commerce_paymill_cardonfile_charge($payment_method, $payment_initialized['payment_id'], $payment_initialized['card'], $order);
+  if (commerce_paymill_has_cardonfile() && !empty($pane_values['cardonfile']) && $pane_values['cardonfile'] != 'new') {
+    $card_data = commerce_cardonfile_load($pane_values['cardonfile']);
+    if ($pane_values['cardonfile_instance_default']) {
+      commerce_cardonfile_set_default_card($pane_values['cardonfile']);
+    }
+    return commerce_paymill_cardonfile_charge($payment_method, $card_data, $order);
   }
 
+  $payment_initialized = commerce_paymill_payment_initialize($pane_values, $payment_method, $order);
   // Handle the payment in a one off manner, i.e., no Card On File.
-  return commerce_paymill_process_transaction($payment_method, $payment_initialized['payment_id'], $payment_initialized['card'], $order);
+  return commerce_paymill_process_transaction($payment_method, $payment_initialized['payment_id'], $payment_initialized['card_data'], $payment_initialized['card_default'], $order);
 }
 
 /**
@@ -1073,30 +1083,25 @@ function commerce_paymill_libraries_info() {
  * Card on file callback: background charge payment.
  *
  * @param object $payment_method_instance
- *  The payment method instance definition array.
- * @param $payment_id
- *   Paymill payment object.
- * @param $card
- *   Array containing the Card on File entity (under key `card_data`) and a
- *   boolean (under key `card_default`) that indicates if the card has to be set
- *   as default.
+ *   The payment method instance definition array.
+ * @param $card_data
+ *   Card on File entity.
  * @param $order
  *   The order object that is being processed.
  * @param array $charge
  *   The price array for the charge amount with keys of 'amount' and 'currency'
  *   If null the total value of the order is used.
  *
- * @return
- *   FALSE if the transaction was not successful, TRUE otherwise.
+ * @return FALSE if the transaction was not successful, TRUE otherwise.
  */
-function commerce_paymill_cardonfile_charge($payment_method_instance, $payment_id, $card, $order, $charge = NULL) {
+function commerce_paymill_cardonfile_charge($payment_method_instance, $card_data, $order, $charge = NULL) {
   // Format order total for the transaction.
   if (!isset($charge)) {
-    $wrapper = entity_metadata_wrapper('commerce_order', $order);
-    $charge = commerce_line_items_total($wrapper->commerce_line_items);
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+    $charge = commerce_line_items_total($order_wrapper->commerce_line_items);
   }
 
-  return commerce_paymill_process_transaction($payment_method_instance, $payment_id, $card, $order, $charge);
+  return commerce_paymill_process_transaction($payment_method_instance, $card_data->remote_id, $card_data, FALSE, $order, NULL, NULL, $charge);
 }
 
 /**
@@ -1152,7 +1157,7 @@ function commerce_paymill_cardonfile_create_form_validate($form, &$form_state) {
     'amount' => '100',
     'currency_code' => 'EUR',
   );
-  if (!commerce_paymill_process_transaction($payment_method_instance, $payment_initialized['payment_id'], $payment_initialized['card'], NULL, $user->mail, $user->uid, $charge)) {
+  if (!commerce_paymill_process_transaction($payment_method_instance, $payment_initialized['payment_id'], $payment_initialized['card_data'], $payment_initialized['card_default'], NULL, $user->mail, $user->uid, $charge)) {
     form_set_error('credit_card');
     return;
   }
@@ -1174,10 +1179,10 @@ function commerce_paymill_cardonfile_create_form_submit($form, &$form_state) {
  *  The payment method instance definition array.
  * @param $payment_id
  *   Paymill payment ID.
- * @param array $card
- *   (optional) Array containing the Card on File entity (under key `card_data`)
- *   and a boolean (under key `card_default`) that indicates if the card has to
- *   be set as default.
+ * @param $card_data
+ *   (optional) Card on File entity.
+ * @param $card_default
+ *   (optional) Whether the card should be set as default or not.
  * @param object $order
  *   (optional) The order object that is being processed.
  * @param $client_mail
@@ -1190,11 +1195,10 @@ function commerce_paymill_cardonfile_create_form_submit($form, &$form_state) {
  *   (optional) Required in case the order is not provided. The price array for
  *   the charge amount with keys of 'amount' and 'currency'.
  *
- * @internal param string $payment Paymill payment object.*   Paymill payment object.
  * @return boolean
  *   FALSE if the transaction was not successful, TRUE otherwise.
  */
-function commerce_paymill_process_transaction($payment_method_instance, $payment_id, $card = NULL, $order = NULL, $client_mail = NULL, $client_uid = NULL, $charge = NULL) {
+function commerce_paymill_process_transaction($payment_method_instance, $payment_id, $card_data = NULL, $card_default = FALSE, $order = NULL, $client_mail = NULL, $client_uid = NULL, $charge = NULL) {
 
   // Extra Paymill client options.
   $extra_options = array();
@@ -1305,10 +1309,10 @@ function commerce_paymill_process_transaction($payment_method_instance, $payment
   }
 
   // If card data is provided, save it.
-  if (!empty($card)) {
-    commerce_cardonfile_save($card['card_data']);
-    if ($card['card_default']) {
-      commerce_cardonfile_set_default_card($card['card_data']->card_id);
+  if (!empty($card_data)) {
+    commerce_cardonfile_save($card_data);
+    if ($card_default) {
+      commerce_cardonfile_set_default_card($card_data->card_id);
     }
   }
 
