@@ -1136,6 +1136,7 @@ function commerce_paymill_cardonfile_create_form($form, &$form_state, $op, $card
   );
 
   $form += commerce_paymill_credit_card_form_build($form_state['payment_method_instance'], NULL, $form_state['charge']);
+  // @todo Card is always saved as default, we should probably do this smarter.
   $form['cardonfile'] = array(
     '#type' => 'value',
     '#value' => 'new',
