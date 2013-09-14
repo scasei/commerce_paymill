@@ -12,6 +12,9 @@ define('COMMERCE_PAYMILL_SERVER', 'https://api.paymill.de/v2/');
 // Test and live modes.
 define('COMMERCE_PAYMILL_MODE_TEST', 'test');
 define('COMMERCE_PAYMILL_MODE_LIVE', 'live');
+// Default amount to ask preauthorization for when adding a new card with CoF.
+define('COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_AMOUNT', '1');
+define('COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_CURRENCY', 'EUR');
 
 /**
  * Implements hook_commerce_payment_method_info().
@@ -57,6 +60,7 @@ function commerce_paymill_default_settings() {
     'mode' => COMMERCE_PAYMILL_MODE_TEST,
     'capture_mode' => COMMERCE_CREDIT_AUTH_CAPTURE,
     'cardonfile' => FALSE,
+    'cardonfile_preauth_amount' => COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_AMOUNT,
     'proxy_settings' => array(
       'proxy_type' => 0,
       'proxy_host' => '',
@@ -181,8 +185,23 @@ function commerce_paymill_settings_form($settings = NULL) {
     $form['cardonfile'] = array(
       '#type' => 'checkbox',
       '#title' => t('Enable Card on File functionality with this payment method.'),
-      '#description' => t('Stores tokenised value for card data.'),
+      '#description' => t('Stores tokenized value for card data.'),
       '#default_value' => $settings['cardonfile'],
+    );
+    $form['cardonfile_preauth_amount'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Amount used for preauthorization when adding a new card'),
+      '#description' => t('Adding a new card without going through checkout requires a preauthorization for an arbitrary amount. Asking for at least 1 euro is recommended in order to trigger 3D Secure authorization. This amount will never be captured.'),
+      '#default_value' => $settings['cardonfile_preauth_amount'],
+      '#required' => TRUE,
+      '#size' => 2,
+      // @todo Consider not hardcoding the currency for preauthorization.
+      '#field_suffix' => COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_CURRENCY,
+      '#states' => array(
+        'visible' => array(
+          ':input[name="parameter[payment_method][settings][payment_method][settings][cardonfile]"]' => array('checked' => TRUE),
+        ),
+      ),
     );
   }
 
@@ -1108,13 +1127,15 @@ function commerce_paymill_cardonfile_charge($payment_method_instance, $card_data
  * Card on File callback: create credit card form.
  */
 function commerce_paymill_cardonfile_create_form($form, &$form_state, $op, $card_data) {
-  $payment_method_instance = commerce_payment_method_instance_load('commerce_paymill|commerce_payment_commerce_paymill');
-  // @todo 7.x-2.x-cardonfile-create — Figure out the amount.
-  $charge = array(
-    'amount' => '100',
-    'currency_code' => 'EUR',
+  // Pass along information to the validate and submit handlers.
+  $form_state['card_user'] = user_load($card_data->uid);
+  $form_state['payment_method_instance'] = commerce_payment_method_instance_load($card_data->instance_id);
+  $form_state['charge'] = array(
+    'amount' => 100 * (int) $form_state['payment_method_instance']['settings']['cardonfile_preauth_amount'],
+    'currency_code' => COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_CURRENCY,
   );
-  $form += commerce_paymill_credit_card_form_build($payment_method_instance, NULL, $charge);
+
+  $form += commerce_paymill_credit_card_form_build($form_state['payment_method_instance'], NULL, $form_state['charge']);
   $form['cardonfile'] = array(
     '#type' => 'value',
     '#value' => 'new',
@@ -1138,26 +1159,16 @@ function commerce_paymill_cardonfile_create_form($form, &$form_state, $op, $card
  * Form validate handler: create credit card form.
  */
 function commerce_paymill_cardonfile_create_form_validate($form, &$form_state) {
-  // @todo 7.x-2.x-cardonfile-create — Do not use the current user, it's a bug.
-  global $user;
-  // @todo 7.x-2.x-cardonfile-create — Do not hardcore payment method instance.
-  $payment_method_instance = commerce_payment_method_instance_load('commerce_paymill|commerce_payment_commerce_paymill');
-  if (!commerce_paymill_credit_card_validate($form_state['values'], $payment_method_instance, NULL)) {
+  if (!commerce_paymill_credit_card_validate($form_state['values'], $form_state['payment_method_instance'], NULL)) {
     form_set_error('credit_card');
     return;
   }
-  $payment_initialized = commerce_paymill_payment_initialize($form_state['values'], $payment_method_instance, NULL, $user->mail, $user->uid);
+  $payment_initialized = commerce_paymill_payment_initialize($form_state['values'], $form_state['payment_method_instance'], NULL, $form_state['card_user']->mail, $form_state['card_user']->uid);
   if (empty($payment_initialized)) {
     form_set_error('credit_card');
     return;
   }
-
-  // @todo 7.x-2.x-cardonfile-create — Figure out the amount.
-  $charge = array(
-    'amount' => '100',
-    'currency_code' => 'EUR',
-  );
-  if (!commerce_paymill_process_transaction($payment_method_instance, $payment_initialized['payment_id'], $payment_initialized['card_data'], $payment_initialized['card_default'], NULL, $user->mail, $user->uid, $charge)) {
+  if (!commerce_paymill_process_transaction($form_state['payment_method_instance'], $payment_initialized['payment_id'], $payment_initialized['card_data'], $payment_initialized['card_default'], NULL, $form_state['card_user']->mail, $form_state['card_user']->uid, $form_state['charge'])) {
     form_set_error('credit_card');
     return;
   }
@@ -1167,9 +1178,10 @@ function commerce_paymill_cardonfile_create_form_validate($form, &$form_state) {
  * Form submit handler: create credit card form.
  */
 function commerce_paymill_cardonfile_create_form_submit($form, &$form_state) {
-  // @todo 7.x-2.x-cardonfile-create — Do not use the current user, it's a bug.
-  global $user;
-  $form_state['redirect'] = 'user/' . $GLOBALS['user']->uid . '/cards';
+  // Everything happened during the validation, so if we get to this point,
+  // that means everything were okay, so the only thing left is to redirect the
+  // user back to their cards.
+  $form_state['redirect'] = 'user/' . $form_state['card_user']->uid . '/cards';
 }
 
 /**
