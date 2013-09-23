@@ -783,6 +783,12 @@ function commerce_paymill_submit_form_submit($payment_method, $pane_form, $pane_
     if ($pane_values['cardonfile_instance_default']) {
       commerce_cardonfile_set_default_card($pane_values['cardonfile']);
     }
+    if ($charge['amount'] == 0) {
+      // If the user already has a card on file and the order balance is zero,
+      // we would do a new preauthorization which is unnecessary, so let's
+      // return here.
+      return TRUE;
+    }
     return commerce_paymill_cardonfile_charge($payment_method, $card_data, $order);
   }
 
