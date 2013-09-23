@@ -13,8 +13,8 @@ define('COMMERCE_PAYMILL_SERVER', 'https://api.paymill.de/v2/');
 define('COMMERCE_PAYMILL_MODE_TEST', 'test');
 define('COMMERCE_PAYMILL_MODE_LIVE', 'live');
 // Default amount to ask preauthorization for when adding a new card with CoF.
-define('COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_AMOUNT', '1');
-define('COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_CURRENCY', 'EUR');
+define('COMMERCE_PAYMILL_MINIMUM_PREAUTH_AMOUNT', '1');
+define('COMMERCE_PAYMILL_MINIMUM_PREAUTH_CURRENCY', 'EUR');
 
 /**
  * Implements hook_commerce_payment_method_info().
@@ -60,7 +60,7 @@ function commerce_paymill_default_settings() {
     'mode' => COMMERCE_PAYMILL_MODE_TEST,
     'capture_mode' => COMMERCE_CREDIT_AUTH_CAPTURE,
     'cardonfile' => FALSE,
-    'cardonfile_preauth_amount' => COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_AMOUNT,
+    'cardonfile_preauth_amount' => COMMERCE_PAYMILL_MINIMUM_PREAUTH_AMOUNT,
     'proxy_settings' => array(
       'proxy_type' => 0,
       'proxy_host' => '',
@@ -196,7 +196,7 @@ function commerce_paymill_settings_form($settings = NULL) {
       '#required' => TRUE,
       '#size' => 2,
       // @todo Consider not hardcoding the currency for preauthorization.
-      '#field_suffix' => COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_CURRENCY,
+      '#field_suffix' => COMMERCE_PAYMILL_MINIMUM_PREAUTH_CURRENCY,
       '#states' => array(
         'visible' => array(
           ':input[name="parameter[payment_method][settings][payment_method][settings][cardonfile]"]' => array('checked' => TRUE),
@@ -1132,7 +1132,7 @@ function commerce_paymill_cardonfile_create_form($form, &$form_state, $op, $card
   $form_state['payment_method_instance'] = commerce_payment_method_instance_load($card_data->instance_id);
   $form_state['charge'] = array(
     'amount' => 100 * (int) $form_state['payment_method_instance']['settings']['cardonfile_preauth_amount'],
-    'currency_code' => COMMERCE_PAYMILL_DEFAULT_CARDONFILE_PREAUTH_CURRENCY,
+    'currency_code' => COMMERCE_PAYMILL_MINIMUM_PREAUTH_CURRENCY,
   );
 
   $form += commerce_paymill_credit_card_form_build($form_state['payment_method_instance'], NULL, $form_state['charge']);
@@ -1238,12 +1238,36 @@ function commerce_paymill_process_transaction($payment_method_instance, $payment
     $extra_options = commerce_paymill_set_proxy($payment_method_instance['settings']['proxy_settings']);
   }
 
+  if (empty($charge)) {
+    $charge = commerce_payment_order_balance($order);
+  }
+
   $original_response = array();
-  if (empty($order) || $payment_method_instance['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
-    // Do only a preauthorization if there is no order provided, which most
-    // likely means that we only want to store a credit card.
-    // Also do preauthorization only if the payment method instance is
-    // configured that way.
+  if (empty($order) || $charge['amount'] == 0 || $payment_method_instance['settings']['capture_mode'] == COMMERCE_CREDIT_AUTH_ONLY) {
+    // Do only a preauthorization
+    // * if there is no order provided, which means that we only want to store a
+    //   credit card and we are not in the checkout process;
+    // * if an order is provided but the balance of the order is zero, which
+    //   means we are in a checkout process, but only want to store a card and
+    //   charge it later;
+    // * if there is no order provided, but the amount that we should charge is,
+    //   and it's zero.
+    // * if the payment method instance configured to do so.
+    if ($charge['amount'] / 100 < COMMERCE_PAYMILL_MINIMUM_PREAUTH_AMOUNT) {
+      // If the amount to be preauthorized is smaller then the minimum amount
+      // that Paymill can preauthorize, let's use the minimum amount then with
+      // the corresponding currency. This is a fallback to make sure we don't
+      // run into a failure.
+      $charge['currency'] = COMMERCE_PAYMILL_MINIMUM_PREAUTH_CURRENCY;
+      if (commerce_paymill_has_cardonfile()) {
+        // Use the Card on File setting for preauthorized amount if it's
+        // applicable.
+        $charge['amount'] = $payment_method_instance['settings']['cardonfile_preauth_amount'] * 100;
+      }
+      else {
+        $charge['amount'] = COMMERCE_PAYMILL_MINIMUM_PREAUTH_AMOUNT * 100;
+      }
+    }
     $payment_service = new Services_Paymill_Preauthorizations($api_key, COMMERCE_PAYMILL_SERVER, $extra_options);
     $transaction_description = 'Preauthorization';
     if (!empty($order)) {
@@ -1258,10 +1282,6 @@ function commerce_paymill_process_transaction($payment_method_instance, $payment
     if (!empty($order)) {
       $transaction_description = sprintf('Captured order %s.', $order->order_id);
     }
-  }
-
-  if (empty($charge)) {
-    $charge = commerce_payment_order_balance($order);
   }
 
   $amount = commerce_currency_amount_to_decimal($charge['amount'], $charge['currency_code']);
