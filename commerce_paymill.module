@@ -441,7 +441,7 @@ function commerce_paymill_credit_card_form_build($payment_method_instance, $orde
   );
 
   // Get order balance if order is provided.
-  if (!empty($order)) {
+  if (empty($charge)) {
     $charge = commerce_payment_order_balance($order);
   }
 
@@ -677,6 +677,21 @@ function commerce_paymill_payment_initialize($submitted_values, $payment_method_
  * Payment method callback: submit form.
  */
 function commerce_paymill_submit_form($payment_method, $pane_values, $checkout_pane, $order) {
+  $charge = commerce_payment_order_balance($order);
+  if ($charge['amount'] == 0) {
+    // If the order balance is zero, that should only trigger a
+    // preauthorization, but with a bigger amount than zero.
+    $charge['currency'] = COMMERCE_PAYMILL_MINIMUM_PREAUTH_CURRENCY;
+    if (commerce_paymill_has_cardonfile()) {
+      // Use the Card on File setting for preauthorized amount if it's
+      // applicable.
+      $charge['amount'] = $payment_method['settings']['cardonfile_preauth_amount'] * 100;
+    }
+    else {
+      $charge['amount'] = COMMERCE_PAYMILL_MINIMUM_PREAUTH_AMOUNT * 100;
+    }
+    return commerce_paymill_credit_card_form_build($payment_method, $order, $charge);
+  }
   return commerce_paymill_credit_card_form_build($payment_method, $order);
 }
 
