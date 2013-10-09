@@ -643,7 +643,7 @@ function commerce_paymill_payment_initialize($submitted_values, $payment_method_
 
     if (isset($payment['error'])) {
       commerce_paymill_error_message('error', empty($order));
-      commerce_paymill_error_handler('payment', !empty($order) ? $order->order_id : NULL, '', check_plain($payment['error']));
+      commerce_paymill_error_handler('payment', !empty($order) ? $order->order_id : NULL, $payment, check_plain($payment['error']));
       return FALSE;
     }
 
@@ -727,18 +727,19 @@ function commerce_paymill_add_transaction($order,
 /**
  * Error handling function that writes to the watchdog.
  */
-function commerce_paymill_error_handler($type, $order_id, $error_code, $error_message, $level = WATCHDOG_WARNING) {
+function commerce_paymill_error_handler($type, $order_id, $response, $error_message, $level = WATCHDOG_WARNING) {
   $replacements = array(
     '@type' => $type,
     '@order_id' => $order_id,
-    '@code' => $error_code,
+    '@code' => (is_array($response) && isset($response['response_code'])) ? $response['response_code'] : $response,
     '@return_text' => $error_message,
+    '!full_response' => '<pre>' . print_r($response, TRUE) . '</pre>',
   );
   if (!empty($order_id)) {
-    watchdog('commerce_paymill', 'Paymill @type failure on the order @order_id: [@code] - "@return_text"', $replacements, $level);
+    watchdog('commerce_paymill', 'Paymill @type failure on the order @order_id: [@code] - "@return_text". Full response: !full_response', $replacements, $level);
   }
   else {
-    watchdog('commerce_paymill', 'Paymill @type failure: [@code] - "@return_text"', $replacements, $level);
+    watchdog('commerce_paymill', 'Paymill @type failure: [@code] - "@return_text". Full response: !full_response', $replacements, $level);
   }
 
 } // commerce_paymill_error_handler
@@ -831,6 +832,7 @@ function commerce_paymill_get_client_id($mail, $uid, $settings) {
   );
   $client = $client_service->create($client_params);
   // @TODO : check with Paymill the format of return for this.
+  // @todo Standardize this and other requests.
   if (isset($client['error'])) {
     $errors = array();
     if (isset($client['error']['messages'])) {
@@ -1338,10 +1340,10 @@ function commerce_paymill_process_transaction($payment_method_instance, $payment
     $message = commerce_paymill_get_status_message($response['response_code']);
     $message = isset($message) ? $message : check_plain($response['error']);
     if ($response['response_code']) {
-      commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, $response['response_code'], $message);
+      commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, $response, $message);
     }
     else {
-      commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, '', $message);
+      commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, $response, $message);
     }
     commerce_paymill_error_message('error', empty($order));
 
@@ -1389,7 +1391,7 @@ function commerce_paymill_process_transaction($payment_method_instance, $payment
 
   // Check for errors from the response.
   if (isset($response['error'])) {
-    commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, '', $response['error']);
+    commerce_paymill_error_handler('transaction', !empty($order) ? $order->order_id : NULL, $response, $response['error']);
     commerce_paymill_error_message();
     return FALSE;
   }
