@@ -7,7 +7,9 @@
 
 
 // The Paymill library download URI.
-define('PAYMILL_DOWNLOAD_URI', 'https://github.com/Paymill/Paymill-PHP/archive/master.zip');
+define('PAYMILL_DOWNLOAD_URI', 'http://github.com/paymill/paymill-php/archive/v2.4.0.zip');
+// Name of the downloaded library folder, so that we can rename it.
+define('PAYMILL_DOWNLOAD_DIRECTORY_NAME', 'paymill-php-2.4.0');
 // The default path for installing the library.
 define('COMMERCE_PAYMILL_LIBRARY_DEFAULT_PATH',
        sprintf('sites%sall%slibraries', DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR));
@@ -93,7 +95,6 @@ function drush_commerce_paymill_library() {
   chdir($path);
 
   $filename = basename(PAYMILL_DOWNLOAD_URI);
-  $dirname = 'paymill-php-master';
 
   // Remove any existing Paymill library zip archive.
   if (is_file($filename)) {
@@ -117,7 +118,7 @@ function drush_commerce_paymill_library() {
   chdir($olddir);
 
   // The full dirname.
-  $dirname = $path . DIRECTORY_SEPARATOR . $dirname;
+  $dirname = $path . DIRECTORY_SEPARATOR . PAYMILL_DOWNLOAD_DIRECTORY_NAME;
   // The destination directory.
   $dest = sprintf('%s%s%s', $path, DIRECTORY_SEPARATOR, 'paymill');
 
