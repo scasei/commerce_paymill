@@ -1,6 +1,6 @@
 name = Commerce Paymill
 description = Provides an interface for making payments via Paymill
-package = Commerce (payment)
+package = Commerce (contrib)
 dependencies[] = commerce
 dependencies[] = commerce_payment
 dependencies[] = libraries
