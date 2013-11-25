@@ -1364,8 +1364,8 @@ function commerce_paymill_process_transaction($payment_method_instance, $payment
     return FALSE;
   }
 
-  // If card data is provided, save it.
-  if (!empty($card_data)) {
+  // If card data is provided and it's not saved yet, save it.
+  if (!empty($card_data) && empty($card_data->card_id)) {
     commerce_cardonfile_save($card_data);
     if ($card_default) {
       commerce_cardonfile_set_default_card($card_data->card_id);
