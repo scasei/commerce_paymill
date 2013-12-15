@@ -15,6 +15,10 @@ define('COMMERCE_PAYMILL_MODE_LIVE', 'live');
 // Default amount to ask preauthorization for when adding a new card with CoF.
 define('COMMERCE_PAYMILL_MINIMUM_PREAUTH_AMOUNT', '1');
 define('COMMERCE_PAYMILL_MINIMUM_PREAUTH_CURRENCY', 'EUR');
+// Version of Paymill library.
+define('COMMERCE_PAYMILL_LIBRARY_VERSION', '2.4.0');
+// Download URL of Paymill library.
+define('COMMERCE_PAYMILL_LIBRARY_DOWNLOAD_URI', 'http://github.com/paymill/paymill-php/archive/v' . COMMERCE_PAYMILL_LIBRARY_VERSION . '.zip');
 
 /**
  * Implements hook_commerce_payment_method_info().
@@ -1093,13 +1097,9 @@ function commerce_paymill_libraries_info() {
   $libraries['paymill'] = array(
     'name' => 'Paymill',
     'vendor' => 'http://www.paymill.com/',
-    'download_url' => 'https://github.com/paymill/paymill-php/archive/master.zip',
+    'download_url' => COMMERCE_PAYMILL_LIBRARY_DOWNLOAD_URI,
     'path' => 'lib/Services/Paymill',
-    'version arguments' => array(
-      'file' => 'lib/Services/Paymill/Apiclient/Curl.php',
-      'pattern' => '@Paymill-php/([0-9\.]+)@',
-      'lines' => 60,
-    ),
+    'version' => COMMERCE_PAYMILL_LIBRARY_VERSION,
     'files' => array(
       'php' => array(
         'Base.php',
