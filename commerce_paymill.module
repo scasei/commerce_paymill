@@ -1314,6 +1314,7 @@ function commerce_paymill_process_transaction($payment_method_instance, $payment
     'currency' => $charge['currency_code'],
     'payment' => $payment_id,
     'description' => $transaction_description,
+    'source' => 'commerceguys',
   );
 
   $response = $payment_service->create($transaction_params);
