@@ -105,8 +105,11 @@ var PAYMILL_PUBLIC_KEY = '...';
                             cvc: card_cvc
                         }, paymillResponseHandler);
                     }
+
                     // Prevent the form from submitting with the default action.
-                    return false;
+                    if ($('.card-number').length) {
+                        return false;
+                    }
                 });
             }
         }
