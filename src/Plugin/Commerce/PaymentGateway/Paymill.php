@@ -266,6 +266,17 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function deletePaymentMethod(PaymentMethodInterface $payment_method) {
+    // Delete the remote Paymill payment.
+    try {
+      $paymill_payment = new \Paymill\Models\Request\Payment();
+      $paymill_payment->setId($payment_method->getRemoteId());
+      $this->paymill_request->delete($paymill_payment);
+    }
+    catch (\Paymill\Services\PaymillException $e) {
+      throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
+    }
+    // Delete the local entity.
+    $payment_method->delete();
   }
 
   /**
