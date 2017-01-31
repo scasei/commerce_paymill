@@ -170,14 +170,12 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     $owner = $payment_method->getOwner();
     $customer_id = $owner->commerce_remote_id->getByProvider('commerce_paymill');
 
-    $amount_integer = $this->formatNumber($amount->getNumber());
-
     // Create Paymill payment or preauthorization.
     try {
       if ($capture) {
         // Create Paymill transaction.
         $transaction = new \Paymill\Models\Request\Transaction();
-        $transaction->setAmount($amount_integer)
+        $transaction->setAmount($this->amountGetInteger($amount))
           ->setCurrency($currency_code)
           ->setPayment($payment_method->getRemoteId())
           ->setDescription('Test Transaction');
@@ -191,7 +189,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
         // Create Paymill preauthorization.
         $preauthorization = new \Paymill\Models\Request\Preauthorization();
         $preauthorization->setPayment($payment_method->getRemoteId())
-          ->setAmount($amount_integer)
+          ->setAmount($this->amountGetInteger($amount))
           ->setCurrency($currency_code)
           ->setDescription('Test Preauthorization');
         $remote_preauthorization = $this->paymill_request->create($preauthorization);
@@ -217,11 +215,10 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     }
     // If not specified, capture the entire amount.
     $amount = $amount ?: $payment->getAmount();
-    $amount_integer = $this->formatNumber($amount->getNumber());
 
     try {
       $paymill_transaction = new \Paymill\Models\Request\Transaction();
-      $paymill_transaction->setAmount($amount_integer)
+      $paymill_transaction->setAmount($this->amountGetInteger($amount))
         ->setCurrency($amount->getCurrencyCode())
         ->setPreauthorization($payment->getRemoteId())
         ->setDescription('Test Transaction');
@@ -266,12 +263,10 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
       throw new InvalidRequestException(sprintf("Can't refund more than %s.", $balance->__toString()));
     }
 
-    $amount_integer = $this->formatNumber($amount->getNumber());
-
     try {
       $paymill_refund = new \Paymill\Models\Request\Refund();
       $paymill_refund->setId($payment->getRemoteId())
-        ->setAmount($amount_integer)
+        ->setAmount($this->amountGetInteger($amount))
         ->setDescription('Sample Description');
       $this->paymill_request->create($paymill_refund);
     }
@@ -424,18 +419,14 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
   }
 
   /**
-   * Formats the charge amount for paymill.
-   *
-   * @param integer $amount
-   *   The amount being charged.
-   *
-   * @return integer
-   *   The Paymill formatted amount.
+   * {@inheritdoc}
    */
-  protected function formatNumber($amount) {
-    $amount = $amount * 100;
-    $amount = number_format($amount, 0, '.', '');
-    return $amount;
+  public function amountGetInteger(Price $amount) {
+    $amount_number = $amount->getNumber();
+    $amount_number = $amount_number * 100;
+    $amount_integer = number_format($amount_number, 0, '.', '');
+
+    return $amount_integer;
   }
 
 }
