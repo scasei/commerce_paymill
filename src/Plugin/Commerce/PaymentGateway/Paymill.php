@@ -68,7 +68,6 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
       'capture_completed',
       'capture_partially_refunded'
     ]);
-
     $operations['refund'] = [
       'title' => $this->t('Refund'),
       'page_title' => $this->t('Refund payment'),
@@ -212,7 +211,32 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
+    if ($payment->getState()->value != 'authorization') {
+      throw new \InvalidArgumentException('Only payments in the "authorization" state can be captured.');
+    }
+    // If not specified, capture the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    $amount_integer = $this->formatNumber($amount->getNumber());
 
+    try {
+      $paymill_transaction = new \Paymill\Models\Request\Transaction();
+      $paymill_transaction->setAmount($amount_integer)
+        ->setCurrency($amount->getCurrencyCode())
+        ->setPreauthorization($payment->getRemoteId())
+        ->setDescription('Test Transaction');
+
+      $remote_transaction = $this->paymill_request->create($paymill_transaction);
+    }
+    catch (\Paymill\Services\PaymillException $e) {
+      throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
+    }
+
+    // Update the local payment entity.
+    $payment->state = 'capture_completed';
+    $payment->setRemoteId($remote_transaction->getId());
+    $payment->setAmount($amount);
+    $payment->setCapturedTime(REQUEST_TIME);
+    $payment->save();
   }
 
   /**
