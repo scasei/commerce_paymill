@@ -6,6 +6,7 @@ use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\Exception\HardDeclineException;
+use Drupal\commerce_payment\Exception\InvalidRequestException;
 use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
@@ -250,7 +251,45 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
+    if (!in_array($payment->getState()->value, [
+      'capture_completed',
+      'capture_partially_refunded'
+    ])
+    ) {
+      throw new \InvalidArgumentException('Only payments in the "capture_completed" and "capture_partially_refunded" states can be refunded.');
+    }
+    // If not specified, refund the entire amount.
+    $amount = $amount ?: $payment->getAmount();
+    // Validate the requested amount.
+    $balance = $payment->getBalance();
+    if ($amount->greaterThan($balance)) {
+      throw new InvalidRequestException(sprintf("Can't refund more than %s.", $balance->__toString()));
+    }
 
+    $amount_integer = $this->formatNumber($amount->getNumber());
+
+    try {
+      $paymill_refund = new \Paymill\Models\Request\Refund();
+      $paymill_refund->setId($payment->getRemoteId())
+        ->setAmount($amount_integer)
+        ->setDescription('Sample Description');
+      $this->paymill_request->create($paymill_refund);
+    }
+    catch (\Paymill\Services\PaymillException $e) {
+      throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
+    }
+
+    $old_refunded_amount = $payment->getRefundedAmount();
+    $new_refunded_amount = $old_refunded_amount->add($amount);
+    if ($new_refunded_amount->lessThan($payment->getAmount())) {
+      $payment->state = 'capture_partially_refunded';
+    }
+    else {
+      $payment->state = 'capture_refunded';
+    }
+
+    $payment->setRefundedAmount($new_refunded_amount);
+    $payment->save();
   }
 
   /**
