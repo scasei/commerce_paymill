@@ -6,6 +6,7 @@ use Drupal\commerce_payment\CreditCard;
 use Drupal\commerce_payment\Entity\PaymentInterface;
 use Drupal\commerce_payment\Entity\PaymentMethodInterface;
 use Drupal\commerce_payment\Exception\HardDeclineException;
+use Drupal\commerce_payment\Exception\PaymentGatewayException;
 use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
@@ -172,27 +173,33 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     $amount_integer = $this->formatNumber($amount->getNumber());
 
     // Create Paymill payment or preauthorization.
-    if ($capture) {
-      // Create Paymill transaction.
-      $transaction = new \Paymill\Models\Request\Transaction();
-      $transaction->setAmount($amount_integer)
-        ->setCurrency($currency_code)
-        ->setPayment($payment_method->getRemoteId())
-        ->setDescription('Test Transaction');
+    try {
+      if ($capture) {
+        // Create Paymill transaction.
+        $transaction = new \Paymill\Models\Request\Transaction();
+        $transaction->setAmount($amount_integer)
+          ->setCurrency($currency_code)
+          ->setPayment($payment_method->getRemoteId())
+          ->setDescription('Test Transaction');
 
-      $remote_transaction = $this->paymill_request->create($transaction);
-      $payment->setRemoteId($remote_transaction->getId());
-      $payment->setCapturedTime(REQUEST_TIME);
+        $remote_transaction = $this->paymill_request->create($transaction);
+        dpm($remote_transaction);
+        $payment->setRemoteId($remote_transaction->getId());
+        $payment->setCapturedTime(REQUEST_TIME);
+      }
+      else {
+        // Create Paymill preauthorization.
+        $preauthorization = new \Paymill\Models\Request\Preauthorization();
+        $preauthorization->setPayment($payment_method->getRemoteId())
+          ->setAmount($amount_integer)
+          ->setCurrency($currency_code)
+          ->setDescription('Test Preauthorization');
+        $remote_preauthorization = $this->paymill_request->create($preauthorization);
+        $payment->setRemoteId($remote_preauthorization->getId());
+      }
     }
-    else {
-      // Create Paymill preauthorization.
-      $preauthorization = new \Paymill\Models\Request\Preauthorization();
-      $preauthorization->setPayment($payment_method->getRemoteId())
-        ->setAmount($amount_integer)
-        ->setCurrency($currency_code)
-        ->setDescription('Test Preauthorization');
-      $remote_preauthorization = $this->paymill_request->create($preauthorization);
-      $payment->setRemoteId($remote_preauthorization->getId());
+    catch (\Paymill\Services\PaymillException $e) {
+      throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
     }
 
     $payment->state = $capture ? 'capture_completed' : 'authorization';
@@ -238,7 +245,12 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     }
 
     /** @var \Paymill\Models\Response\Payment $remote_payment_method */
-    $remote_payment_method = $this->doCreatePaymentMethod($payment_method, $payment_details);
+    try {
+      $remote_payment_method = $this->doCreatePaymentMethod($payment_method, $payment_details);
+    }
+    catch (\Paymill\Services\PaymillException $e) {
+      throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
+    }
     $payment_method->card_type = $this->mapCreditCardType($remote_payment_method->getCardType());
     $payment_method->card_number = $remote_payment_method->getLastFour();
     $payment_method->card_exp_month = $remote_payment_method->getExpireMonth();
