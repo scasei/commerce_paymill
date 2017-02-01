@@ -20,8 +20,8 @@ use Drupal\Core\Form\FormStateInterface;
  *
  * @CommercePaymentGateway(
  *   id = "paymill",
- *   label = "Paymill",
- *   display_label = "Paymill",
+ *   label = @Translation("Paymill"),
+ *   display_label = @Translation("Paymill"),
  *   forms = {
  *     "add-payment-method" = "Drupal\commerce_paymill\PluginForm\Paymill\PaymentMethodAddForm",
  *   },
@@ -162,7 +162,8 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     if (empty($payment_method)) {
       throw new \InvalidArgumentException('The provided payment has no payment method referenced.');
     }
-    if (REQUEST_TIME >= $payment_method->getExpiresTime()) {
+    $request_time = \Drupal::service('commerce.time')->getRequestTime();
+    if ($request_time >= $payment_method->getExpiresTime()) {
       throw new HardDeclineException('The provided payment method has expired');
     }
     $amount = $payment->getAmount();
@@ -174,25 +175,28 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     try {
       if ($capture) {
         // Create Paymill transaction.
-        $transaction = new \Paymill\Models\Request\Transaction();
-        $transaction->setAmount($this->amountGetInteger($amount))
+        $paymill_transaction = new \Paymill\Models\Request\Transaction();
+        $paymill_transaction->setAmount($this->amountGetInteger($amount))
           ->setCurrency($currency_code)
-          ->setPayment($payment_method->getRemoteId())
-          ->setDescription('Test Transaction');
+          ->setPayment($payment_method->getRemoteId());
+        if ($customer_id) {
+          $paymill_transaction->setClient($customer_id);
+        }
 
-        $remote_transaction = $this->paymill_request->create($transaction);
-        dpm($remote_transaction);
+        $remote_transaction = $this->paymill_request->create($paymill_transaction);
         $payment->setRemoteId($remote_transaction->getId());
-        $payment->setCapturedTime(REQUEST_TIME);
+        $payment->setCapturedTime($request_time);
       }
       else {
         // Create Paymill preauthorization.
-        $preauthorization = new \Paymill\Models\Request\Preauthorization();
-        $preauthorization->setPayment($payment_method->getRemoteId())
+        $paymill_preauthorization = new \Paymill\Models\Request\Preauthorization();
+        $paymill_preauthorization->setPayment($payment_method->getRemoteId())
           ->setAmount($this->amountGetInteger($amount))
-          ->setCurrency($currency_code)
-          ->setDescription('Test Preauthorization');
-        $remote_preauthorization = $this->paymill_request->create($preauthorization);
+          ->setCurrency($currency_code);
+        if ($customer_id) {
+          $paymill_preauthorization->setClient($customer_id);
+        }
+        $remote_preauthorization = $this->paymill_request->create($paymill_preauthorization);
         $payment->setRemoteId($remote_preauthorization->getId());
       }
     }
@@ -202,7 +206,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
 
     $payment->state = $capture ? 'capture_completed' : 'authorization';
 
-    $payment->setAuthorizedTime(REQUEST_TIME);
+    $payment->setAuthorizedTime($request_time);
     $payment->save();
   }
 
@@ -216,13 +220,12 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     // If not specified, capture the entire amount.
     $amount = $amount ?: $payment->getAmount();
 
+    // Capture Paymill transaction.
     try {
       $paymill_transaction = new \Paymill\Models\Request\Transaction();
       $paymill_transaction->setAmount($this->amountGetInteger($amount))
         ->setCurrency($amount->getCurrencyCode())
-        ->setPreauthorization($payment->getRemoteId())
-        ->setDescription('Test Transaction');
-
+        ->setPreauthorization($payment->getRemoteId());
       $remote_transaction = $this->paymill_request->create($paymill_transaction);
     }
     catch (\Paymill\Services\PaymillException $e) {
@@ -230,10 +233,11 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     }
 
     // Update the local payment entity.
+    $request_time = \Drupal::service('commerce.time')->getRequestTime();
     $payment->state = 'capture_completed';
     $payment->setRemoteId($remote_transaction->getId());
     $payment->setAmount($amount);
-    $payment->setCapturedTime(REQUEST_TIME);
+    $payment->setCapturedTime($request_time);
     $payment->save();
   }
 
@@ -402,7 +406,6 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    *   The Commerce credit card type.
    */
   protected function mapCreditCardType($card_type) {
-    // https://support.paymill.com/questions/which-cards-and-payment-types-can-i-accept-with-paymill.
     $map = [
       'amex' => 'amex',
       'dinersclub' => 'dinersclub',
