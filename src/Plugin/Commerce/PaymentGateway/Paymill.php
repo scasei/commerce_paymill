@@ -406,11 +406,14 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    *   The Commerce credit card type.
    */
   protected function mapCreditCardType($card_type) {
+    // Card types supported by Paymill.
+    // https://developers.paymill.com/API/index#list-payments-
     $map = [
       'amex' => 'amex',
-      'dinersclub' => 'dinersclub',
+      'diners' => 'dinersclub',
       'discover' => 'discover',
       'jcb' => 'jcb',
+      'maestro' => 'maestro',
       'mastercard' => 'mastercard',
       'visa' => 'visa',
     ];
