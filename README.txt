@@ -65,7 +65,7 @@ HOW IT WORKS
   or to select one of the existing PAYMILL payment methods.
 
 * Payment Terminal
-  The store owners can Capture and Refund the PAYMILL payments.
+  The store owners can Void, Capture and Refund the PAYMILL payments.
 
 
 TROUBLESHOOTING
