@@ -54,34 +54,6 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
   /**
    * {@inheritdoc}
    */
-  public function buildPaymentOperations(PaymentInterface $payment) {
-    $operations = [];
-
-    $access = $payment->getState()->value == 'authorization';
-    $operations['capture'] = [
-      'title' => $this->t('Capture'),
-      'page_title' => $this->t('Capture payment'),
-      'plugin_form' => 'capture-payment',
-      'access' => $access,
-    ];
-
-    $access = in_array($payment->getState()->value, [
-      'capture_completed',
-      'capture_partially_refunded'
-    ]);
-    $operations['refund'] = [
-      'title' => $this->t('Refund'),
-      'page_title' => $this->t('Refund payment'),
-      'plugin_form' => 'refund-payment',
-      'access' => $access,
-    ];
-
-    return $operations;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
   public function getPaymillPublicKey() {
     return $key = ($this->getMode() == 'test') ? $this->configuration['test_public_key'] : $this->configuration['live_public_key'];
   }
@@ -245,7 +217,26 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function voidPayment(PaymentInterface $payment) {
+    if ($payment->getState()->value != 'authorization') {
+      throw new \InvalidArgumentException('Only payments in the "authorization" state can be voided.');
+    }
 
+    // Void Paymill transaction - delete the preauthorization.
+    try {
+      $paymill_preauthorization = new \Paymill\Models\Request\Preauthorization();
+      $paymill_preauthorization->setId($payment->getRemoteId());
+      /** @var \Paymill\Models\Response\Preauthorization $remote_preauthorization */
+      $remote_preauthorization = $this->paymill_request->getOne($paymill_preauthorization);
+      $this->paymill_request->delete($paymill_preauthorization);
+    }
+    catch (\Paymill\Services\PaymillException $e) {
+      throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
+    }
+
+    $payment->state = 'authorization_voided';
+    // Update the remote id with transaction id of the deleted preauthorization.
+    $payment->setRemoteId($remote_preauthorization->getTransaction()->getId());
+    $payment->save();
   }
 
   /**
