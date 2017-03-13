@@ -13,6 +13,7 @@ form:
   js:
     js/commerce_paymill.form.js: {}
   dependencies:
+    - classy/messages
     - core/jquery
     - core/drupal
     - core/jquery.once

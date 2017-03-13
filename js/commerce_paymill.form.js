@@ -93,7 +93,7 @@ var PAYMILL_PUBLIC_KEY = '...';
                             payment_errors += '<li>' + error_message + '</li>';
                         });
                         payment_errors += '</ul>';
-                        $form.find('.payment-errors').html(payment_errors);
+                        $form.find('.payment-errors').html(Drupal.theme('commercePaymillError', payment_errors));
                     }
 
                     // Create token if the card form was validated.
@@ -114,5 +114,11 @@ var PAYMILL_PUBLIC_KEY = '...';
             }
         }
     };
+
+    $.extend(Drupal.theme, /** @lends Drupal.theme */{
+        commercePaymillError: function (message) {
+            return $('<div class="messages messages--error"></div>').html(message);
+        }
+    });
 
 })(jQuery, Drupal, drupalSettings);

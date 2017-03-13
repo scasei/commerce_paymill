@@ -27,7 +27,8 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
     // To display validation errors.
     $element['payment_errors'] = [
       '#type' => 'markup',
-      '#markup' => '<span class="payment-errors"></span>',
+      '#markup' => '<div class="payment-errors"></div>',
+      '#weight' => -200,
     ];
 
     // Add class identifiers for card data.
