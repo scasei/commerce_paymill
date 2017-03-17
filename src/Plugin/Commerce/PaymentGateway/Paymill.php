@@ -29,6 +29,7 @@ use Drupal\Core\Form\FormStateInterface;
  *   credit_card_types = {
  *     "amex", "dinersclub", "discover", "jcb", "maestro", "mastercard", "visa",
  *   },
+ *   js_library = "commerce_paymill/form",
  * )
  */
 class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {

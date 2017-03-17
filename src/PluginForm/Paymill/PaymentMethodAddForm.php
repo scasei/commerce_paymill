@@ -17,7 +17,6 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
     $element = parent::buildCreditCardForm($element, $form_state);
 
     // Set our key to settings array.
-    $element['#attached']['library'][] = 'commerce_paymill/form';
     $element['#attached']['drupalSettings']['commercePaymill'] = [
       'publicKey' => $plugin->getPaymillPublicKey(),
     ];
