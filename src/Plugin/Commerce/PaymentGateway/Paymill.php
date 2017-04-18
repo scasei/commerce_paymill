@@ -373,7 +373,9 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
       $remote_client = $this->paymill_request->create($client);
       if (!empty($remote_client->getId())) {
         $customer_id = $remote_client->getId();
-        $owner->commerce_remote_id->setByProvider('commerce_paymill', $customer_id);
+        if ($owner) {
+          $owner->commerce_remote_id->setByProvider('commerce_paymill', $customer_id);
+        }
       }
     }
 
