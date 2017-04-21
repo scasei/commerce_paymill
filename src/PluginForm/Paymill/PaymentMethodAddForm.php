@@ -36,6 +36,19 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
     $element['expiration']['year']['#attributes']['class'][] = 'card-expiry-year';
     $element['security_code']['#attributes']['class'][] = 'card-cvc';
 
+    // Alter elements for removing #name and required options.
+    $alter_elements = [
+      '#label_attributes' => [
+        'class' => ['form-required-js', 'form-required'],
+      ],
+      '#process' => [
+        'commerce_paymill_payment_form_remove_element_name'
+      ],
+      '#required' => FALSE,
+    ];
+    $element['number'] = $alter_elements + $element['number'];
+    $element['security_code'] = $alter_elements + $element['security_code'];
+
     // Populated by the JS library.
     $element['paymill_token'] = [
       '#type' => 'hidden',
