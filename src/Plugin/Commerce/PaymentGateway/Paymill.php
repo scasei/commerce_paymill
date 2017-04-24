@@ -141,8 +141,11 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     }
     $amount = $payment->getAmount();
     $currency_code = $payment->getAmount()->getCurrencyCode();
+    $customer_id = NULL;
     $owner = $payment_method->getOwner();
-    $customer_id = $owner->commerce_remote_id->getByProvider('commerce_paymill');
+    if ($owner && !$owner->isAnonymous()) {
+      $customer_id = $owner->commerce_remote_id->getByProvider('commerce_paymill');
+    }
 
     // Create Paymill payment or preauthorization.
     try {
@@ -347,13 +350,14 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
   protected function doCreatePaymentMethod(PaymentMethodInterface $payment_method, array $payment_details) {
     $owner = $payment_method->getOwner();
     $customer_id = NULL;
-    if ($owner) {
+    $create_client = FALSE;
+    if ($owner && !$owner->isAnonymous()) {
       $customer_id = $owner->commerce_remote_id->getByProvider('commerce_paymill');
       $customer_email = $owner->getEmail();
+      $create_client = TRUE;
     }
 
     $client = new \Paymill\Models\Request\Client();
-    $create_client = TRUE;
 
     // Check if the customer exists as Paymill client, if not create a new one.
     if ($customer_id) {
@@ -373,9 +377,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
       $remote_client = $this->paymill_request->create($client);
       if (!empty($remote_client->getId())) {
         $customer_id = $remote_client->getId();
-        if ($owner) {
-          $owner->commerce_remote_id->setByProvider('commerce_paymill', $customer_id);
-        }
+        $owner->commerce_remote_id->setByProvider('commerce_paymill', $customer_id);
       }
     }
 
