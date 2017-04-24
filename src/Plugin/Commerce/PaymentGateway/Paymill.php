@@ -135,7 +135,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     if (empty($payment_method)) {
       throw new \InvalidArgumentException('The provided payment has no payment method referenced.');
     }
-    $request_time = \Drupal::service('commerce.time')->getRequestTime();
+    $request_time = \Drupal::time()->getRequestTime();
     if ($request_time >= $payment_method->getExpiresTime()) {
       throw new HardDeclineException('The provided payment method has expired');
     }
@@ -206,7 +206,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     }
 
     // Update the local payment entity.
-    $request_time = \Drupal::service('commerce.time')->getRequestTime();
+    $request_time = \Drupal::time()->getRequestTime();
     $payment->state = 'capture_completed';
     $payment->setRemoteId($remote_transaction->getId());
     $payment->setAmount($amount);
