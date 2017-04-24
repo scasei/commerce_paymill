@@ -22,7 +22,9 @@ var PAYMILL_PUBLIC_KEY = '...';
    */
   Drupal.behaviors.commercePaymillForm = {
     attach: function (context) {
-      if (typeof drupalSettings.commercePaymill.fetched == 'undefined') {
+      var $form = $('.paymill-form', context).closest('form');
+      if (drupalSettings.commercePaymill && drupalSettings.commercePaymill.publicKey && !$form.hasClass('paymill-processed')) {
+        $form.addClass('paymill-processed');
         drupalSettings.commercePaymill.fetched = true;
         // Clear the token every time the payment form is loaded. We only need the token
         // one time, as it is submitted to Paymill after a card is validated. If this
@@ -30,7 +32,6 @@ var PAYMILL_PUBLIC_KEY = '...';
         $('#paymill_token').val('');
         var key = drupalSettings.commercePaymill.publicKey;
         PAYMILL_PUBLIC_KEY = key;
-        var $form = $('.paymill-form', context).closest('form');
 
         var paymillResponseHandler = function (error, result) {
           if (error) {
