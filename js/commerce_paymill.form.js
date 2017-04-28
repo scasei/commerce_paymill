@@ -3,10 +3,12 @@
  * Javascript to generate Paymill token in PCI-compliant way.
  */
 
+/* global paymill */
+
 // We need to set PAYMILL_PUBLIC_KEY var.
 var PAYMILL_PUBLIC_KEY = '...';
 
-(function ($, Drupal, drupalSettings, Paymill) {
+(function ($, Drupal, drupalSettings) {
 
   'use strict';
 
@@ -22,16 +24,16 @@ var PAYMILL_PUBLIC_KEY = '...';
    */
   Drupal.behaviors.commercePaymillForm = {
     attach: function (context) {
-      var $form = $('.paymill-form', context).closest('form');
-      if (drupalSettings.commercePaymill && drupalSettings.commercePaymill.publicKey && !$form.hasClass('paymill-processed')) {
-        $form.addClass('paymill-processed');
-        drupalSettings.commercePaymill.fetched = true;
+      if (!drupalSettings.commercePaymill || !drupalSettings.commercePaymill.publicKey) {
+        return;
+      }
+      $('.paymill-form', context).once('paymill-processed').each(function () {
+        var $form = $(this).closest('form');
         // Clear the token every time the payment form is loaded. We only need the token
         // one time, as it is submitted to Paymill after a card is validated. If this
         // form reloads it's due to an error; received tokens are stored in the checkout pane.
         $('#paymill_token').val('');
-        var key = drupalSettings.commercePaymill.publicKey;
-        PAYMILL_PUBLIC_KEY = key;
+        PAYMILL_PUBLIC_KEY = drupalSettings.commercePaymill.publicKey;
 
         var paymillResponseHandler = function (error, result) {
           if (error) {
@@ -91,7 +93,7 @@ var PAYMILL_PUBLIC_KEY = '...';
           }
           if (error_messages.length > 0) {
             var payment_errors = '<ul>';
-            error_messages.forEach(function(error_message) {
+            error_messages.forEach(function (error_message) {
               payment_errors += '<li>' + error_message + '</li>';
             });
             payment_errors += '</ul>';
@@ -113,7 +115,7 @@ var PAYMILL_PUBLIC_KEY = '...';
             return false;
           }
         });
-      }
+      });
     }
   };
 
