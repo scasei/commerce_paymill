@@ -353,8 +353,10 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     $create_client = FALSE;
     if ($owner && !$owner->isAnonymous()) {
       $customer_id = $owner->commerce_remote_id->getByProvider('commerce_paymill');
+      if (!$customer_id) {
+        $create_client = TRUE;
+      }
       $customer_email = $owner->getEmail();
-      $create_client = TRUE;
     }
 
     $client = new \Paymill\Models\Request\Client();
@@ -378,6 +380,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
       if (!empty($remote_client->getId())) {
         $customer_id = $remote_client->getId();
         $owner->commerce_remote_id->setByProvider('commerce_paymill', $customer_id);
+        $owner->save();
       }
     }
 
@@ -386,7 +389,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     $paymill_payment->setToken($payment_details['paymill_token']);
     // Create a payment method for an existing customer.
     if ($customer_id) {
-      $paymill_payment->setClient($owner->commerce_remote_id->getByProvider('commerce_paymill'));
+      $paymill_payment->setClient($customer_id);
     }
     $remote_payment_method = $this->paymill_request->create($paymill_payment);
     return $remote_payment_method;
