@@ -12,6 +12,7 @@ use Drupal\commerce_payment\PaymentMethodTypeManager;
 use Drupal\commerce_payment\PaymentTypeManager;
 use Drupal\commerce_payment\Plugin\Commerce\PaymentGateway\OnsitePaymentGatewayBase;
 use Drupal\commerce_price\Price;
+use Drupal\Component\Datetime\TimeInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 
@@ -39,17 +40,17 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    *
    * @var \Paymill\Request
    */
-  protected $paymill_request;
+  protected $api;
 
   /**
    * {@inheritdoc}
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager) {
-    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager);
-    $private_key = ($this->getMode() == 'test') ? $this->configuration['test_private_key'] : $this->configuration['live_private_key'];
-    $this->paymill_request = new \Paymill\Request($private_key);
-    $this->public_key = $this->getPaymillPublicKey();
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, TimeInterface $time) {
+    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager, $time);
 
+    $private_key = ($this->getMode() == 'test') ? $this->configuration['test_private_key'] : $this->configuration['live_private_key'];
+    $this->api = new \Paymill\Request($private_key);
+    $this->public_key = $this->getPaymillPublicKey();
   }
 
   /**
@@ -127,18 +128,10 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function createPayment(PaymentInterface $payment, $capture = TRUE) {
-    if ($payment->getState()->value != 'new') {
-      throw new \InvalidArgumentException('The provided payment is in an invalid state.');
-    }
+    $this->assertPaymentState($payment, ['new']);
     $payment_method = $payment->getPaymentMethod();
+    $this->assertPaymentMethod($payment_method);
 
-    if (empty($payment_method)) {
-      throw new \InvalidArgumentException('The provided payment has no payment method referenced.');
-    }
-    $request_time = \Drupal::time()->getRequestTime();
-    if ($request_time >= $payment_method->getExpiresTime()) {
-      throw new HardDeclineException('The provided payment method has expired');
-    }
     $amount = $payment->getAmount();
     $currency_code = $payment->getAmount()->getCurrencyCode();
     $customer_id = NULL;
@@ -159,9 +152,8 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
           $paymill_transaction->setClient($customer_id);
         }
 
-        $remote_transaction = $this->paymill_request->create($paymill_transaction);
+        $remote_transaction = $this->api->create($paymill_transaction);
         $payment->setRemoteId($remote_transaction->getId());
-        $payment->setCapturedTime($request_time);
       }
       else {
         // Create Paymill preauthorization.
@@ -172,7 +164,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
         if ($customer_id) {
           $paymill_preauthorization->setClient($customer_id);
         }
-        $remote_preauthorization = $this->paymill_request->create($paymill_preauthorization);
+        $remote_preauthorization = $this->api->create($paymill_preauthorization);
         $payment->setRemoteId($remote_preauthorization->getId());
       }
     }
@@ -180,9 +172,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
       throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
     }
 
-    $payment->state = $capture ? 'capture_completed' : 'authorization';
-
-    $payment->setAuthorizedTime($request_time);
+    $payment->state = $capture ? 'completed' : 'authorization';
     $payment->save();
   }
 
@@ -190,9 +180,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function capturePayment(PaymentInterface $payment, Price $amount = NULL) {
-    if ($payment->getState()->value != 'authorization') {
-      throw new \InvalidArgumentException('Only payments in the "authorization" state can be captured.');
-    }
+    $this->assertPaymentState($payment, ['authorization']);
     // If not specified, capture the entire amount.
     $amount = $amount ?: $payment->getAmount();
 
@@ -202,18 +190,15 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
       $paymill_transaction->setAmount($this->amountGetInteger($amount))
         ->setCurrency($amount->getCurrencyCode())
         ->setPreauthorization($payment->getRemoteId());
-      $remote_transaction = $this->paymill_request->create($paymill_transaction);
+      $remote_transaction = $this->api->create($paymill_transaction);
     }
     catch (\Paymill\Services\PaymillException $e) {
       throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
     }
 
-    // Update the local payment entity.
-    $request_time = \Drupal::time()->getRequestTime();
-    $payment->state = 'capture_completed';
+    $payment->setState('completed');
     $payment->setRemoteId($remote_transaction->getId());
     $payment->setAmount($amount);
-    $payment->setCapturedTime($request_time);
     $payment->save();
   }
 
@@ -221,23 +206,21 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function voidPayment(PaymentInterface $payment) {
-    if ($payment->getState()->value != 'authorization') {
-      throw new \InvalidArgumentException('Only payments in the "authorization" state can be voided.');
-    }
+    $this->assertPaymentState($payment, ['authorization']);
 
     // Void Paymill transaction - delete the preauthorization.
     try {
       $paymill_preauthorization = new \Paymill\Models\Request\Preauthorization();
       $paymill_preauthorization->setId($payment->getRemoteId());
       /** @var \Paymill\Models\Response\Preauthorization $remote_preauthorization */
-      $remote_preauthorization = $this->paymill_request->getOne($paymill_preauthorization);
-      $this->paymill_request->delete($paymill_preauthorization);
+      $remote_preauthorization = $this->api->getOne($paymill_preauthorization);
+      $this->api->delete($paymill_preauthorization);
     }
     catch (\Paymill\Services\PaymillException $e) {
       throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
     }
 
-    $payment->state = 'authorization_voided';
+    $payment->setState('authorization_voided');
     // Update the remote id with transaction id of the deleted preauthorization.
     $payment->setRemoteId($remote_preauthorization->getTransaction()->getId());
     $payment->save();
@@ -247,27 +230,17 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function refundPayment(PaymentInterface $payment, Price $amount = NULL) {
-    if (!in_array($payment->getState()->value, [
-      'capture_completed',
-      'capture_partially_refunded'
-    ])
-    ) {
-      throw new \InvalidArgumentException('Only payments in the "capture_completed" and "capture_partially_refunded" states can be refunded.');
-    }
+    $this->assertPaymentState($payment, ['completed', 'partially_refunded']);
     // If not specified, refund the entire amount.
     $amount = $amount ?: $payment->getAmount();
-    // Validate the requested amount.
-    $balance = $payment->getBalance();
-    if ($amount->greaterThan($balance)) {
-      throw new InvalidRequestException(sprintf("Can't refund more than %s.", $balance->__toString()));
-    }
+    $this->assertRefundAmount($payment, $amount);
 
     try {
       $paymill_refund = new \Paymill\Models\Request\Refund();
       $paymill_refund->setId($payment->getRemoteId())
         ->setAmount($this->amountGetInteger($amount))
         ->setDescription('Sample Description');
-      $this->paymill_request->create($paymill_refund);
+      $this->api->create($paymill_refund);
     }
     catch (\Paymill\Services\PaymillException $e) {
       throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
@@ -276,10 +249,10 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     $old_refunded_amount = $payment->getRefundedAmount();
     $new_refunded_amount = $old_refunded_amount->add($amount);
     if ($new_refunded_amount->lessThan($payment->getAmount())) {
-      $payment->state = 'capture_partially_refunded';
+      $payment->setState('partially_refunded');
     }
     else {
-      $payment->state = 'capture_refunded';
+      $payment->setState('refunded');
     }
 
     $payment->setRefundedAmount($new_refunded_amount);
@@ -327,7 +300,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     try {
       $paymill_payment = new \Paymill\Models\Request\Payment();
       $paymill_payment->setId($payment_method->getRemoteId());
-      $this->paymill_request->delete($paymill_payment);
+      $this->api->delete($paymill_payment);
     }
     catch (\Paymill\Services\PaymillException $e) {
       throw new PaymentGatewayException($e->getErrorMessage(), $e->getResponseCode());
@@ -365,7 +338,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     if ($customer_id) {
       $client->setId($customer_id);
       /** @var \Paymill\Models\Response\Client $remote_client */
-      $remote_client = $this->paymill_request->getOne($client);
+      $remote_client = $this->api->getOne($client);
 
       if (!empty($remote_client->getId())) {
         $create_client = FALSE;
@@ -376,7 +349,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     if ($create_client) {
       $client->setEmail($owner->getEmail())
         ->setDescription(t('Customer for :mail', array(':mail' => $customer_email)));
-      $remote_client = $this->paymill_request->create($client);
+      $remote_client = $this->api->create($client);
       if (!empty($remote_client->getId())) {
         $customer_id = $remote_client->getId();
         $owner->commerce_remote_id->setByProvider('commerce_paymill', $customer_id);
@@ -391,7 +364,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     if ($customer_id) {
       $paymill_payment->setClient($customer_id);
     }
-    $remote_payment_method = $this->paymill_request->create($paymill_payment);
+    $remote_payment_method = $this->api->create($paymill_payment);
     return $remote_payment_method;
   }
 
