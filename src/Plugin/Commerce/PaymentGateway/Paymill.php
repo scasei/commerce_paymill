@@ -48,8 +48,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
   public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, TimeInterface $time) {
     parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager, $time);
 
-    $private_key = ($this->getMode() == 'test') ? $this->configuration['test_private_key'] : $this->configuration['live_private_key'];
-    $this->api = new \Paymill\Request($private_key);
+    $this->api = new \Paymill\Request($this->configuration['private_key']);
     $this->public_key = $this->getPaymillPublicKey();
   }
 
@@ -57,7 +56,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    * {@inheritdoc}
    */
   public function getPaymillPublicKey() {
-    return $key = ($this->getMode() == 'test') ? $this->configuration['test_public_key'] : $this->configuration['live_public_key'];
+    return $key = $this->configuration['public_key'];
   }
 
   /**
@@ -65,10 +64,8 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
    */
   public function defaultConfiguration() {
     return [
-      'test_private_key' => '',
-      'test_public_key' => '',
-      'live_private_key' => '',
-      'live_public_key' => '',
+      'private_key' => '',
+      'public_key' => '',
     ] + parent::defaultConfiguration();
   }
 
@@ -78,31 +75,16 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildConfigurationForm($form, $form_state);
 
-    $form['test_private_key'] = [
+    $form['private_key'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Private key (test)'),
-      '#default_value' => $this->configuration['test_private_key'],
+      '#title' => $this->t('Private key'),
+      '#default_value' => $this->configuration['private_key'],
       '#required' => TRUE,
     ];
-
-    $form['test_public_key'] = [
+    $form['public_key'] = [
       '#type' => 'textfield',
-      '#title' => $this->t('Public key (test)'),
-      '#default_value' => $this->configuration['test_public_key'],
-      '#required' => TRUE,
-    ];
-
-    $form['live_private_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Private key (live)'),
-      '#default_value' => $this->configuration['live_private_key'],
-      '#required' => TRUE,
-    ];
-
-    $form['live_public_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Public key (live)'),
-      '#default_value' => $this->configuration['live_public_key'],
+      '#title' => $this->t('Public key'),
+      '#default_value' => $this->configuration['public_key'],
       '#required' => TRUE,
     ];
 
@@ -117,10 +99,8 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
 
     if (!$form_state->getErrors()) {
       $values = $form_state->getValue($form['#parents']);
-      $this->configuration['test_private_key'] = $values['test_private_key'];
-      $this->configuration['test_public_key'] = $values['test_public_key'];
-      $this->configuration['live_private_key'] = $values['live_private_key'];
-      $this->configuration['live_public_key'] = $values['live_public_key'];
+      $this->configuration['private_key'] = $values['private_key'];
+      $this->configuration['public_key'] = $values['public_key'];
     }
   }
 

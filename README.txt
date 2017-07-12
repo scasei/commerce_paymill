@@ -43,11 +43,11 @@ CONFIGURATION
 * Create new Paymill payment gateway
   Administration > Commerce > Configuration > Payment gateways > Add payment gateway
   Settings available:
-  - Private key (test);
-  - Public key (test);
-  - Private key (live);
-  - Public key (live).
-  All those API credentials are provided by the Paymill merchant account.
+  - Private key;
+  - Public key.
+  All those API credentials are provided by the Paymill merchant account. It is
+  recommended to enter test credentials and then override these with live
+  credentials in settings.php. This way live credentials will not be exported to code.
 
 
 HOW IT WORKS
