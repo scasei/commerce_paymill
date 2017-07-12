@@ -305,7 +305,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     $customer_id = NULL;
     $create_client = FALSE;
     if ($owner && !$owner->isAnonymous()) {
-      $customer_id = $owner->commerce_remote_id->getByProvider('commerce_paymill');
+      $customer_id = $this->getRemoteCustomerId($owner);
       if (!$customer_id) {
         $create_client = TRUE;
       }
@@ -331,8 +331,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
         ->setDescription(t('Customer for :mail', array(':mail' => $customer_email)));
       $remote_client = $this->api->create($client);
       if (!empty($remote_client->getId())) {
-        $customer_id = $remote_client->getId();
-        $owner->commerce_remote_id->setByProvider('commerce_paymill', $customer_id);
+        $this->setRemoteCustomerId($owner, $remote_client->getId());
         $owner->save();
       }
     }
