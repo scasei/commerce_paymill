@@ -18,3 +18,15 @@ form:
     - core/drupal
     - core/jquery.once
     - commerce_paymill/paymill
+
+    
+form-offsite:
+  version: VERSION
+  js:
+    js/commerce_paymill.form-offsite.js: {}
+  dependencies:
+    - classy/messages
+    - core/jquery
+    - core/drupal
+    - core/jquery.once
+    - commerce_paymill/paymill

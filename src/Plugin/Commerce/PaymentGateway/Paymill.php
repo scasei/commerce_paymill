@@ -35,74 +35,8 @@ use Drupal\Core\Form\FormStateInterface;
  */
 class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
 
-  /**
-   * The Paymill gateway used for making API calls.
-   *
-   * @var \Paymill\Request
-   */
-  protected $api;
+   use PaymillConfigurationTrait;
 
-  /**
-   * {@inheritdoc}
-   */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, PaymentTypeManager $payment_type_manager, PaymentMethodTypeManager $payment_method_type_manager, TimeInterface $time) {
-    parent::__construct($configuration, $plugin_id, $plugin_definition, $entity_type_manager, $payment_type_manager, $payment_method_type_manager, $time);
-
-    $this->api = new \Paymill\Request($this->configuration['private_key']);
-    $this->public_key = $this->getPaymillPublicKey();
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function getPaymillPublicKey() {
-    return $key = $this->configuration['public_key'];
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function defaultConfiguration() {
-    return [
-      'private_key' => '',
-      'public_key' => '',
-    ] + parent::defaultConfiguration();
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
-    $form = parent::buildConfigurationForm($form, $form_state);
-
-    $form['private_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Private key'),
-      '#default_value' => $this->configuration['private_key'],
-      '#required' => TRUE,
-    ];
-    $form['public_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Public key'),
-      '#default_value' => $this->configuration['public_key'],
-      '#required' => TRUE,
-    ];
-
-    return $form;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function submitConfigurationForm(array &$form, FormStateInterface $form_state) {
-    parent::submitConfigurationForm($form, $form_state);
-
-    if (!$form_state->getErrors()) {
-      $values = $form_state->getValue($form['#parents']);
-      $this->configuration['private_key'] = $values['private_key'];
-      $this->configuration['public_key'] = $values['public_key'];
-    }
-  }
 
   /**
    * {@inheritdoc}
@@ -125,7 +59,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
       if ($capture) {
         // Create Paymill transaction.
         $paymill_transaction = new \Paymill\Models\Request\Transaction();
-        $paymill_transaction->setAmount($this->amountGetInteger($amount))
+        $paymill_transaction->setAmount($this->toMinorUnits($amount))
           ->setCurrency($currency_code)
           ->setPayment($payment_method->getRemoteId());
         if ($customer_id) {
@@ -139,7 +73,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
         // Create Paymill preauthorization.
         $paymill_preauthorization = new \Paymill\Models\Request\Preauthorization();
         $paymill_preauthorization->setPayment($payment_method->getRemoteId())
-          ->setAmount($this->amountGetInteger($amount))
+          ->setAmount($this->toMinorUnits($amount))
           ->setCurrency($currency_code);
         if ($customer_id) {
           $paymill_preauthorization->setClient($customer_id);
@@ -167,7 +101,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     // Capture Paymill transaction.
     try {
       $paymill_transaction = new \Paymill\Models\Request\Transaction();
-      $paymill_transaction->setAmount($this->amountGetInteger($amount))
+      $paymill_transaction->setAmount($this->toMinorUnits($amount))
         ->setCurrency($amount->getCurrencyCode())
         ->setPreauthorization($payment->getRemoteId());
       $remote_transaction = $this->api->create($paymill_transaction);
@@ -218,7 +152,7 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
     try {
       $paymill_refund = new \Paymill\Models\Request\Refund();
       $paymill_refund->setId($payment->getRemoteId())
-        ->setAmount($this->amountGetInteger($amount))
+        ->setAmount($this->toMinorUnits($amount))
         ->setDescription('Sample Description');
       $this->api->create($paymill_refund);
     }
@@ -374,16 +308,4 @@ class Paymill extends OnsitePaymentGatewayBase implements PaymillInterface {
 
     return $map[$card_type];
   }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function amountGetInteger(Price $amount) {
-    $amount_number = $amount->getNumber();
-    $amount_number = $amount_number * 100;
-    $amount_integer = number_format($amount_number, 0, '.', '');
-
-    return $amount_integer;
-  }
-
 }
