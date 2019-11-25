@@ -4,6 +4,7 @@ namespace Drupal\commerce_paymill\PluginForm\Paymill;
 
 use Drupal\commerce_payment\PluginForm\PaymentMethodAddForm as BasePaymentMethodAddForm;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\commerce_order\Entity\Order;
 
 class PaymentMethodAddForm extends BasePaymentMethodAddForm {
 
@@ -14,11 +15,16 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
     /** @var \Drupal\commerce_paymill\Plugin\Commerce\PaymentGateway\PaymillInterface $plugin */
     $plugin = $this->plugin;
 
+    /** @var Order $order */
+    $order = \Drupal::routeMatch()->getParameter('commerce_order');
+
     $element = parent::buildCreditCardForm($element, $form_state);
 
     // Set our key to settings array.
     $element['#attached']['drupalSettings']['commercePaymill'] = [
       'publicKey' => $plugin->getPaymillPublicKey(),
+        'amount' => (string)$plugin->toMinorUnits($order->getTotalPrice()),
+        'currency' => $order->getTotalPrice()->getCurrencyCode(),
     ];
 
     $element['#attributes']['class'][] = 'paymill-form';
@@ -48,6 +54,17 @@ class PaymentMethodAddForm extends BasePaymentMethodAddForm {
     ];
     $element['number'] = $alter_elements + $element['number'];
     $element['security_code'] = $alter_elements + $element['security_code'];
+
+//     $element['number']['#attributes']['class'][] = 'hidden';
+//     $element['expiration']['#attributes']['class'][] = 'hidden';
+//     $element['expiration']['#attributes']['class'][] = 'hidden';
+//     $element['security_code']['#attributes']['class'][] = 'hidden';
+
+    unset($element['number']);
+    unset($element['expiration']);
+    unset($element['expiration']);
+    unset($element['security_code']);
+
 
     // Populated by the JS library.
     $element['paymill_token'] = [
