@@ -77,6 +77,11 @@ var PAYMILL_PUBLIC_KEY = '...';
                   if (error) {
                     // Token could not be created, check error object for reason.
                     console.log(error.apierror, error.message);
+        	  		  $form.find('[type="submit"]')
+        	  				.removeProp('disabled')
+        	  				.removeAttr('disabled')
+        	  				.removeClass('c-button--disabled')
+        	  				.siblings('.progress-message').remove();
                   }
                     // Token was created successfully and can be sent to backend.
                   else {
@@ -90,9 +95,13 @@ var PAYMILL_PUBLIC_KEY = '...';
                     }
                   }
 	          );
-	          
+//	          
 	          // Disable the submit button to prevent repeated clicks
-	          $form.find('button').prop('disabled', true);
+	          $form.find('[type="submit"]')
+	          		.prop('disabled', true)
+	          		.attr('disabled','disabled')
+	          		.addClass('c-button--disabled')
+	          		.after('<span class="progress-message">&nbsp;Bitte warten...</span>');
 	          return false;
           }
 
